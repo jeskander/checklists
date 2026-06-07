@@ -1,0 +1,51 @@
+.block-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.block-list--compact .block-row {
+  padding: 0.35rem 0;
+  border-bottom: none;
+}
+
+.block-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--border);
+  box-sizing: border-box;
+}
+
+.block-row.is-dragging {
+  opacity: 0.45;
+}
+
+.block-row .drag-handle {
+  flex-shrink: 0;
+  color: var(--ink-faint);
+  font-size: 0.85rem;
+  padding: 0.5rem;
+  cursor: grab;
+  touch-action: none;
+}
+
+.block-row .drag-handle:active {
+  cursor: grabbing;
+}
+
+.block-row .item-field,
+.block-row .item-title-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.block-row .item-duration-input {
+  width: 5.5rem;
+  flex-shrink: 0;
+}
+
+.block-row .item-check {
+  flex-shrink: 0;
+}

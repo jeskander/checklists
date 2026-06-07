@@ -1,0 +1,30 @@
+.progress-bg {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+.progress-layer {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  transition: width 0.4s ease-out;
+}
+
+.progress-time {
+  background: color-mix(in srgb, var(--progress-time) 35%, transparent);
+}
+
+.progress-task {
+  background: color-mix(in srgb, var(--progress-task) 30%, transparent);
+  mix-blend-mode: multiply;
+}
+
+[data-theme='dark'] .progress-task {
+  mix-blend-mode: screen;
+  opacity: 0.85;
+}

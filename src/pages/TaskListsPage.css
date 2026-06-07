@@ -1,0 +1,72 @@
+.task-lists-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.task-list-link {
+  display: block;
+  flex: 1;
+  min-width: 0;
+  text-decoration: none;
+  color: inherit;
+}
+
+.task-list-sortable {
+  display: flex;
+  align-items: stretch;
+  gap: 0.35rem;
+  margin-bottom: 0.65rem;
+}
+
+.task-list-sortable:last-child {
+  margin-bottom: 0;
+}
+
+.task-list-sortable .list-card {
+  margin-top: 0;
+}
+
+.task-list-sortable + .task-list-sortable .list-card {
+  border-top: none;
+}
+
+.task-list-sortable:first-child .list-card {
+  border-top-left-radius: var(--radius);
+  border-top-right-radius: var(--radius);
+}
+
+.task-list-sortable:last-child .list-card {
+  border-bottom-left-radius: var(--radius);
+  border-bottom-right-radius: var(--radius);
+}
+
+.task-list-drag-handle {
+  flex-shrink: 0;
+  align-self: center;
+  padding: 0.75rem 0.35rem;
+  color: var(--ink-faint);
+  font-size: 0.85rem;
+  cursor: grab;
+  touch-action: none;
+  background: none;
+  border: none;
+}
+
+.task-list-drag-handle:active {
+  cursor: grabbing;
+}
+
+.task-list-card-overlay {
+  box-shadow: var(--shadow-lg);
+  opacity: 0.95;
+  pointer-events: none;
+}
+
+.task-lists-dnd-hint {
+  margin: 1rem 0 0;
+  font-size: 0.75rem;
+  color: var(--ink-faint);
+  text-align: center;
+}

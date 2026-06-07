@@ -1,0 +1,63 @@
+.dictation-meter-wrap {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 0.85rem;
+}
+
+.dictation-meter {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 3px;
+  height: 52px;
+  padding: 0 0.5rem;
+}
+
+.dictation-meter-bar {
+  width: 4px;
+  height: 44px;
+  border-radius: 999px;
+  background: linear-gradient(
+    to top,
+    color-mix(in srgb, #b54a4a 70%, var(--accent)),
+    #b54a4a
+  );
+  transform-origin: bottom center;
+  will-change: transform;
+}
+
+.dictation-meter--processing .dictation-meter-bar {
+  background: var(--accent);
+  animation: dictationMeterIdle 0.9s ease-in-out infinite;
+}
+
+.dictation-meter--processing .dictation-meter-bar:nth-child(odd) {
+  animation-delay: 0.15s;
+}
+
+.dictation-meter--processing .dictation-meter-bar:nth-child(3n) {
+  animation-delay: 0.3s;
+}
+
+@keyframes dictationMeterIdle {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.dictation-meter-icon {
+  width: 22px;
+  height: 22px;
+  margin-top: 0.35rem;
+  color: color-mix(in srgb, #b54a4a 75%, var(--ink));
+}
+
+.dictation-meter-icon--processing {
+  color: var(--accent);
+}

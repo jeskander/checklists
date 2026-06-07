@@ -1,0 +1,13 @@
+.duration-input {
+  font-variant-numeric: tabular-nums;
+  font-family: var(--font-body), system-ui, monospace;
+  letter-spacing: 0.04em;
+  text-align: center;
+}
+
+.field.duration-input,
+.detail-inline-field.duration-input {
+  width: 4.75rem;
+  padding-left: 0.4rem;
+  padding-right: 0.4rem;
+}

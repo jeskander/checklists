@@ -1,0 +1,10 @@
+.time-input {
+  font-variant-numeric: tabular-nums;
+}
+
+.field.time-input,
+.detail-inline-field.time-input {
+  width: 5.5rem;
+  padding-left: 0.35rem;
+  padding-right: 0.35rem;
+}

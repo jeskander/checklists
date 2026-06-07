@@ -1,0 +1,106 @@
+.item-tree,
+.item-children {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.item-node + .item-node {
+  margin-top: 0.15rem;
+}
+
+.item-tree--compact .item-node + .item-node {
+  margin-top: 0;
+}
+
+.item-tree--compact .item-row {
+  min-height: 32px;
+  gap: 0.5rem;
+}
+
+.item-tree--compact .item-check {
+  width: 20px;
+  height: 20px;
+  border-radius: 5px;
+}
+
+.item-tree--compact .item-title {
+  font-size: 0.85rem;
+  line-height: 1.25;
+}
+
+.item-tree--compact .item-children {
+  margin-top: 0;
+  padding-left: 1.75rem;
+}
+
+.item-children {
+  margin-left: 0;
+  margin-top: 0.25rem;
+  padding-left: 2.25rem;
+  border-left: 2px solid var(--border);
+}
+
+.item-row {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  min-height: 44px;
+}
+
+.item-check {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  border: 1.5px solid var(--border-strong);
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s, border-color 0.2s;
+}
+
+.item-check:not(:disabled):hover {
+  border-color: var(--accent);
+}
+
+.item-check.done {
+  background: var(--progress-task);
+  border-color: var(--progress-task);
+  color: white;
+}
+
+.item-check.parent.done {
+  background: color-mix(in srgb, var(--progress-task) 50%, transparent);
+}
+
+.check-mark {
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.item-title {
+  font-size: 0.9rem;
+}
+
+.item-title.done {
+  color: var(--ink-muted);
+}
+
+.item-title-input {
+  flex: 1;
+  border: none;
+  background: transparent;
+  font-size: 0.9rem;
+  color: var(--ink);
+  padding: 0.25rem 0;
+}
+
+.item-title-input:focus {
+  outline: none;
+  border-bottom: 1px solid var(--accent);
+}
+
+.item-title-input::placeholder {
+  color: var(--ink-faint);
+}

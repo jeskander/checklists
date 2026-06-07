@@ -1,0 +1,352 @@
+.day-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  text-align: center;
+}
+
+.day-header-center h1 {
+  font-size: 1.85rem;
+}
+
+.day-header-meta {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.15rem;
+}
+
+.day-header-center p {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--ink-muted);
+}
+
+.day-today-btn {
+  min-width: 36px;
+  min-height: 36px;
+  color: var(--accent);
+}
+
+.day-today-btn svg {
+  width: 1.15rem;
+  height: 1.15rem;
+}
+
+.day-actions {
+  margin-bottom: 1.25rem;
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.day-actions .btn-primary {
+  flex: 1;
+}
+
+.day-instances {
+  animation: fadeUp 0.45s ease-out 0.08s both;
+}
+
+.empty-state.compact {
+  padding: 2rem 1rem;
+}
+
+.sortable-day-wrap {
+  display: flex;
+  gap: 0.35rem;
+  align-items: stretch;
+  margin-bottom: 0.65rem;
+  touch-action: none;
+}
+
+.sortable-day-wrap:last-child {
+  margin-bottom: 0;
+}
+
+.sortable-day-wrap--dragging {
+  opacity: 0;
+}
+
+.sortable-day-wrap--overlay {
+  margin-bottom: 0;
+  cursor: grabbing;
+  box-shadow: var(--shadow);
+  border-radius: var(--radius);
+  background: var(--bg-elevated);
+  max-width: min(100vw - 2rem, 420px);
+}
+
+.sortable-day-wrap--overlay .day-drag {
+  pointer-events: none;
+}
+
+.sortable-day-wrap--inline {
+  flex: 1;
+  min-width: 0;
+  margin-bottom: 0;
+}
+
+.day-alt-row {
+  display: flex;
+  gap: 0.35rem;
+  align-items: stretch;
+  margin-bottom: 0.65rem;
+}
+
+.day-drag {
+  display: flex;
+  align-items: center;
+  align-self: center;
+  padding: 0 0.25rem;
+  color: var(--ink-faint);
+  font-size: 0.8rem;
+  flex-shrink: 0;
+  user-select: none;
+  border: none;
+  background: transparent;
+  font: inherit;
+  line-height: 1;
+}
+
+.day-drag--handle {
+  cursor: grab;
+  touch-action: none;
+}
+
+.day-drag--handle:active {
+  cursor: grabbing;
+}
+
+.day-drag--collapsed {
+  padding: 0 0.25rem;
+}
+
+.sortable-day-wrap--split .day-drag--handle {
+  align-self: center;
+}
+
+.sortable-day-wrap--gap {
+  align-items: center;
+}
+
+.sortable-day-wrap--gap .day-time-gap {
+  margin: 0;
+  width: 100%;
+}
+
+.sortable-day-card--gap {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  text-align: inherit;
+  font: inherit;
+  border-radius: var(--radius-sm);
+  transition: box-shadow 0.15s ease, transform 0.15s ease;
+}
+
+.sortable-day-card--gap:hover .day-time-gap,
+.sortable-day-card--gap:focus-visible .day-time-gap {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent-soft);
+}
+
+.sortable-day-card--gap:focus-visible {
+  outline: none;
+}
+
+.picker-slot-hint {
+  margin: -0.25rem 0 1rem;
+  font-size: 0.85rem;
+  color: var(--accent);
+}
+
+.sortable-day-card {
+  flex: 1;
+  min-width: 0;
+  position: relative;
+}
+
+.day-instances--dragging .sortable-day-wrap:not(.sortable-day-wrap--dragging) .day-tile-side-zones {
+  pointer-events: auto;
+}
+
+.day-tile-side-zones {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  z-index: 3;
+  pointer-events: none;
+}
+
+.day-tile-side-zone {
+  flex: 1;
+  border-radius: var(--radius);
+  transition: background 0.12s ease, outline 0.12s ease;
+}
+
+.day-tile-side-zone--active {
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  outline: 2px dashed var(--accent);
+  outline-offset: -3px;
+}
+
+.sortable-day-card--drop-left .day-tile {
+  width: calc(50% - 0.175rem);
+  margin-left: calc(50% + 0.175rem);
+  transition: width 0.12s ease, margin 0.12s ease;
+}
+
+.sortable-day-card--drop-right .day-tile {
+  width: calc(50% - 0.175rem);
+  margin-right: calc(50% + 0.175rem);
+  transition: width 0.12s ease, margin 0.12s ease;
+}
+
+.sortable-day-card--drop-left::before,
+.sortable-day-card--drop-right::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: calc(50% - 0.175rem);
+  border: 2px dashed var(--accent);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.sortable-day-card--drop-left::before {
+  left: 0;
+}
+
+.sortable-day-card--drop-right::before {
+  right: 0;
+}
+
+.sortable-day-card--drop-stack::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 32%;
+  border: 2px dashed var(--accent);
+  border-radius: 0 0 var(--radius) var(--radius);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  pointer-events: none;
+  z-index: 2;
+}
+
+.day-tile-stack-zone {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 32%;
+  z-index: 3;
+  pointer-events: none;
+  border-radius: 0 0 var(--radius) var(--radius);
+}
+
+.day-instances--dragging .day-tile-stack-zone {
+  pointer-events: auto;
+}
+
+.day-tile-stack-zone--active {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  outline: 2px dashed var(--accent);
+  outline-offset: -2px;
+}
+
+.sortable-day-wrap--split {
+  margin-bottom: 0;
+}
+
+.sortable-day-wrap--split .sortable-day-card {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.sortable-day-wrap--split-fill {
+  flex: 1;
+  min-height: 0;
+  height: 100%;
+}
+
+.sortable-day-wrap--split-fill .sortable-day-card--gap {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.sortable-day-wrap--split .day-tile {
+  flex: 1;
+  min-height: 0;
+}
+
+.sortable-day-card .day-tile {
+  position: relative;
+  z-index: 1;
+}
+
+.picker-label {
+  margin: 1.25rem 0 0.5rem;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-muted);
+}
+
+.picker-search {
+  margin-top: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.chip--create {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  font-weight: 500;
+}
+
+.picker-results {
+  max-height: 12rem;
+  overflow-y: auto;
+}
+
+.picker-empty {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--ink-muted);
+}
+
+.task-session-picker {
+  margin-top: 0.5rem;
+  padding: 0.75rem 0 0;
+}
+
+.task-session-picker-title {
+  margin: 0 0 0.75rem;
+  font-family: var(--font-display);
+  font-size: 1.1rem;
+}
+
+.task-session-picker-hint {
+  margin: 0.5rem 0 0;
+  font-size: 0.8rem;
+  color: var(--ink-muted);
+}
+
+.task-session-picker-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}

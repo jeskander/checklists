@@ -1,0 +1,87 @@
+.library-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.template-link {
+  display: block;
+  flex: 1;
+  min-width: 0;
+  text-decoration: none;
+  color: inherit;
+}
+
+.template-list {
+  animation: fadeUp 0.5s ease-out 0.05s both;
+}
+
+.template-sortable {
+  display: flex;
+  align-items: stretch;
+  gap: 0.35rem;
+  margin-bottom: 0.65rem;
+  border-radius: var(--radius);
+}
+
+.template-sortable:last-child {
+  margin-bottom: 0;
+}
+
+.template-sortable .list-card {
+  margin-top: 0;
+}
+
+.template-sortable + .template-sortable .list-card {
+  border-top: none;
+}
+
+.template-sortable:first-child .list-card {
+  border-top-left-radius: var(--radius);
+  border-top-right-radius: var(--radius);
+}
+
+.template-sortable:last-child .list-card {
+  border-bottom-left-radius: var(--radius);
+  border-bottom-right-radius: var(--radius);
+}
+
+.template-drag-handle {
+  flex-shrink: 0;
+  align-self: center;
+  padding: 0.75rem 0.35rem;
+  color: var(--ink-faint);
+  font-size: 0.85rem;
+  cursor: grab;
+  touch-action: none;
+  background: none;
+  border: none;
+}
+
+.template-drag-handle:active {
+  cursor: grabbing;
+}
+
+.template-sortable--merge-target {
+  outline: 2px solid var(--accent);
+  outline-offset: 0;
+  background: var(--accent-soft);
+}
+
+.template-sortable--merge-target .list-card {
+  background: transparent;
+}
+
+.template-card-overlay {
+  box-shadow: var(--shadow-lg);
+  opacity: 0.95;
+  pointer-events: none;
+}
+
+.library-dnd-hint {
+  margin: 1rem 0 0;
+  font-size: 0.75rem;
+  color: var(--ink-faint);
+  text-align: center;
+}

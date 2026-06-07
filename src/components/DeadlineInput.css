@@ -1,0 +1,36 @@
+.deadline-input {
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+  flex-shrink: 0;
+}
+
+.deadline-input-field {
+  width: 9.5rem;
+  padding: 0.35rem 0.45rem;
+  font-size: 0.8rem;
+  color: var(--ink-muted);
+}
+
+.deadline-input-field:not([value='']) {
+  color: var(--ink);
+}
+
+.deadline-input-field::-webkit-calendar-picker-indicator {
+  opacity: 0.55;
+  cursor: pointer;
+}
+
+.deadline-input-clear {
+  padding: 0.2rem 0.35rem;
+  font-size: 1rem;
+  line-height: 1;
+  color: var(--ink-faint);
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.deadline-input-clear:hover {
+  color: var(--ink);
+}
