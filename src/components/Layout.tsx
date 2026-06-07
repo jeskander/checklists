@@ -1,7 +1,6 @@
 import { useEffect } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
 import { processCalendarRepeats } from '../services/templateRepeat'
-import { ensureInboxList } from '../services/taskLists'
 import { QuickAddTask } from './QuickAddTask'
 import { Snackbar } from './Snackbar'
 import './Layout.css'
@@ -16,7 +15,6 @@ function NavIcon({ d }: { d: string }) {
 
 export function Layout() {
   useEffect(() => {
-    void ensureInboxList()
     void processCalendarRepeats()
     const id = window.setInterval(() => void processCalendarRepeats(), 60_000)
     return () => window.clearInterval(id)

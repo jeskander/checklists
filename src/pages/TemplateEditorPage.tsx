@@ -1,5 +1,5 @@
-import { useLiveQuery } from 'dexie-react-hooks'
 import { useNavigate, useParams } from 'react-router-dom'
+import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../db/database'
 import { EditableItemList } from '../components/EditableItemList'
 import {
@@ -9,6 +9,8 @@ import {
   deleteTemplate,
   deleteTemplateItem,
   reparentTemplateItem,
+  restoreTemplate,
+  restoreTemplateItems,
   updateTemplate,
   updateTemplateItem,
 } from '../services/templates'
@@ -27,7 +29,10 @@ export function TemplateEditorPage() {
 
   const template = useLiveQuery(() => (id ? db.checklistTemplates.get(id) : undefined), [id])
   const items = useLiveQuery(
-    () => (id ? db.templateItems.where('templateId').equals(id).toArray() : []),
+    () =>
+      id
+        ? db.templateItems.where('templateId').equals(id).sortBy('sortOrder')
+        : [],
     [id]
   )
 
@@ -35,17 +40,18 @@ export function TemplateEditorPage() {
     if (id) void updateTemplate(id, { title })
   })
 
-  if (!id || template === undefined) return <p className="empty-state">Loading…</p>
+  if (!id) return null
+  if (template === undefined) return <p className="empty-state">Loading…</p>
   if (!template) return <p className="empty-state">Template not found</p>
 
-  const sorted = [...(items ?? [])].sort((a, b) => a.sortOrder - b.sortOrder)
+  const sorted = items ?? []
 
   const handleDeleteTemplate = async () => {
     const snapshot = { template, items: [...sorted] }
     await deleteTemplate(id)
     showUndo('Template deleted', async () => {
-      await db.checklistTemplates.put(snapshot.template)
-      await db.templateItems.bulkPut(snapshot.items)
+      await restoreTemplate(snapshot.template)
+      await restoreTemplateItems(snapshot.items)
     })
     navigate('/library')
   }
@@ -103,8 +109,7 @@ export function TemplateEditorPage() {
           const childSnaps = sorted.filter((i) => i.parentItemId === itemId)
           await deleteTemplateItem(itemId)
           showUndo('Item deleted', async () => {
-            await db.templateItems.put(snap)
-            await db.templateItems.bulkPut(childSnaps)
+            await restoreTemplateItems([snap, ...childSnaps])
           })
         }}
         onAddAfter={(afterId) => addTemplateItemAfter(id, afterId).then((i) => i.id)}

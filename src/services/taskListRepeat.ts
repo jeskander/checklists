@@ -27,13 +27,16 @@ async function hasInstanceFromTaskList(dayId: string, taskListId: string): Promi
 /** Add recurring task-list blocks from today through each rule's horizon. */
 export async function processTaskListRepeats(): Promise<void> {
   const lists = await db.taskLists.toArray()
-  const today = todayDateString()
+  const withRepeat = lists.filter((l) => l.repeat != null && !isInboxList(l))
+  if (!withRepeat.length) return
 
-  for (const list of lists) {
-    if (!list.repeat || isInboxList(list)) continue
-    const repeat = normalizeTemplateRepeat(list.repeat)
-    const horizonDays = repeatHorizonDays(repeat)
-    await applyRepeatForTaskList(list.id, list.defaultDurationMin, repeat, today, horizonDays)
+  const today = todayDateString()
+  for (const list of withRepeat) {
+    const repeat = list.repeat
+    if (!repeat) continue
+    const normalized = normalizeTemplateRepeat(repeat)
+    const horizonDays = repeatHorizonDays(normalized)
+    await applyRepeatForTaskList(list.id, list.defaultDurationMin, normalized, today, horizonDays)
   }
 }
 

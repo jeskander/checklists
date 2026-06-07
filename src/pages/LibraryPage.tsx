@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { useLiveQuery } from 'dexie-react-hooks'
 import { Link, useNavigate } from 'react-router-dom'
+import { useLiveQuery } from 'dexie-react-hooks'
 import {
   DndContext,
   DragOverlay,
@@ -44,7 +44,6 @@ function pointerFromDrag(
   return null
 }
 
-/** Any drop on another list row merges; gaps between rows reorder. */
 function mergeTargetAtPointer(x: number, y: number, activeId: string): string | null {
   const elements = document.elementsFromPoint(x, y)
   for (const el of elements) {
@@ -79,23 +78,20 @@ export function LibraryPage() {
     delta: { x: number; y: number }
   }) => {
     const pt = pointerFromDrag(event.activatorEvent, event.delta)
-    setMergeTargetId(
-      pt ? mergeTargetAtPointer(pt.x, pt.y, String(event.active.id)) : null
-    )
+    setMergeTargetId(pt ? mergeTargetAtPointer(pt.x, pt.y, String(event.active.id)) : null)
   }
 
   const handleDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event
+    const list = templates ?? []
 
-    if (!templates?.length) return
+    if (!list.length) return
 
     const activeTemplateId = String(active.id)
     const pt = pointerFromDrag(event.activatorEvent, event.delta)
     const mergeFromPointer = pt ? mergeTargetAtPointer(pt.x, pt.y, activeTemplateId) : null
     const mergeInto =
-      mergeTargetId && mergeTargetId !== activeTemplateId
-        ? mergeTargetId
-        : mergeFromPointer
+      mergeTargetId && mergeTargetId !== activeTemplateId ? mergeTargetId : mergeFromPointer
 
     setActiveId(null)
     setMergeTargetId(null)
@@ -106,7 +102,7 @@ export function LibraryPage() {
     }
 
     if (!over || active.id === over.id) return
-    const newOrder = reorderIds(templates, activeTemplateId, String(over.id))
+    const newOrder = reorderIds(list, activeTemplateId, String(over.id))
     await setTemplateSortOrders(newOrder)
   }
 
@@ -155,13 +151,13 @@ export function LibraryPage() {
           <DragOverlay>
             {activeTemplate ? (
               <div className="list-card template-card-overlay">
-        <div className="list-card-row">
-          <span className="list-card-title">{activeTemplate.title}</span>
-          <span className="list-card-meta">
-            {formatDuration(activeTemplate.defaultDurationMin)} default
-            {activeTemplate.repeat ? ` · ${formatTemplateRepeat(activeTemplate.repeat)}` : ''}
-          </span>
-        </div>
+                <div className="list-card-row">
+                  <span className="list-card-title">{activeTemplate.title}</span>
+                  <span className="list-card-meta">
+                    {formatDuration(activeTemplate.defaultDurationMin)} default
+                    {activeTemplate.repeat ? ` · ${formatTemplateRepeat(activeTemplate.repeat)}` : ''}
+                  </span>
+                </div>
               </div>
             ) : null}
           </DragOverlay>
@@ -204,10 +200,7 @@ function SortableLibraryCard({
       >
         ⋮⋮
       </button>
-      <Link
-        to={`/library/${template.id}`}
-        className="list-card template-link"
-      >
+      <Link to={`/library/${template.id}`} className="list-card template-link">
         <div className="list-card-row">
           <span className="list-card-title">{template.title}</span>
           <span className="list-card-meta">

@@ -7,7 +7,6 @@ export interface ChecklistTemplate {
   sortOrder: number
   /** When set, the block is auto-added to matching calendar days. */
   repeat?: TemplateRepeat
-  notionPageId?: string
   updatedAt: number
 }
 
@@ -17,14 +16,12 @@ export interface TemplateItem {
   parentItemId?: string
   title: string
   sortOrder: number
-  notionPageId?: string
   updatedAt: number
 }
 
 export interface Day {
   id: string
   date: string
-  notionPageId?: string
   updatedAt: number
 }
 
@@ -57,6 +54,7 @@ export interface TaskList {
 export interface TaskListItem {
   id: string
   taskListId: string
+  parentItemId?: string
   title: string
   /** 1 = highest priority when packing into a day session. */
   importance: TaskImportance
@@ -92,7 +90,6 @@ export interface DayInstance {
   altGroupIndex?: number
   /** Top-to-bottom stack index within a split column. */
   altStackIndex?: number
-  notionPageId?: string
   updatedAt: number
 }
 
@@ -107,7 +104,6 @@ export interface DayInstanceItem {
   deadline?: string
   completed: boolean
   sortOrder: number
-  notionPageId?: string
   updatedAt: number
 }
 
@@ -115,14 +111,12 @@ export interface SyncMeta {
   id: string
   lastPullAt?: number
   lastPushAt?: number
-  notionDataSourceIds?: Record<string, string>
 }
 
 export type SyncOp = {
   type: 'create' | 'update' | 'delete'
   entity: string
   entityId: string
-  notionPageId?: string
 }
 
 export type SyncQueueEntry = SyncOp & {

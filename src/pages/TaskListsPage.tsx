@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react'
-import { useLiveQuery } from 'dexie-react-hooks'
+import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { useLiveQuery } from 'dexie-react-hooks'
 import {
   DndContext,
   DragOverlay,
@@ -27,21 +27,21 @@ import './TaskListsPage.css'
 
 export function TaskListsPage() {
   const navigate = useNavigate()
-  const lists = useLiveQuery(() => db.taskLists.orderBy('sortOrder').toArray(), [])
+  const lists = useLiveQuery(async () => {
+    await ensureInboxList()
+    return db.taskLists.orderBy('sortOrder').toArray()
+  }, [])
   const openItems = useLiveQuery(
-    () => db.taskListItems.filter((item) => item.completedAt == null).toArray(),
+    () => db.taskListItems.filter((i) => i.completedAt == null).toArray(),
     []
   )
   const [activeId, setActiveId] = useState<string | null>(null)
-
-  useEffect(() => {
-    void ensureInboxList()
-  }, [])
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }))
 
   const statsByListId = new Map<string, { count: number; totalMin: number }>()
   for (const item of openItems ?? []) {
+    if (item.parentItemId) continue
     const prev = statsByListId.get(item.taskListId) ?? { count: 0, totalMin: 0 }
     statsByListId.set(item.taskListId, {
       count: prev.count + 1,
@@ -61,8 +61,9 @@ export function TaskListsPage() {
   const handleDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event
     setActiveId(null)
-    if (!over || !lists?.length || active.id === over.id) return
-    const newOrder = reorderIds(lists, String(active.id), String(over.id))
+    const list = lists ?? []
+    if (!over || !list.length || active.id === over.id) return
+    const newOrder = reorderIds(list, String(active.id), String(over.id))
     await setTaskListSortOrders(newOrder)
   }
 
@@ -80,9 +81,13 @@ export function TaskListsPage() {
         </button>
       </header>
 
-      {!lists?.length ? (
+      {lists === undefined ? (
         <div className="empty-state">
           <p className="display">Loading task lists…</p>
+        </div>
+      ) : !lists.length ? (
+        <div className="empty-state">
+          <p className="display">No task lists yet</p>
         </div>
       ) : (
         <DndContext
@@ -118,9 +123,7 @@ export function TaskListsPage() {
           </DragOverlay>
         </DndContext>
       )}
-      {lists?.length ? (
-        <p className="task-lists-dnd-hint">Drag to reorder lists</p>
-      ) : null}
+      {lists?.length ? <p className="task-lists-dnd-hint">Drag to reorder lists</p> : null}
     </>
   )
 }

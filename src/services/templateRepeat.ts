@@ -27,13 +27,16 @@ async function hasInstanceFromTemplate(dayId: string, templateId: string): Promi
 /** Add recurring template instances from today through each rule's horizon. */
 export async function processTemplateRepeats(): Promise<void> {
   const templates = await db.checklistTemplates.toArray()
-  const today = todayDateString()
+  const withRepeat = templates.filter((t) => t.repeat != null)
+  if (!withRepeat.length) return
 
-  for (const template of templates) {
-    if (!template.repeat) continue
-    const repeat = normalizeTemplateRepeat(template.repeat)
-    const horizonDays = repeatHorizonDays(repeat)
-    await applyRepeatForTemplate(template.id, repeat, today, horizonDays)
+  const today = todayDateString()
+  for (const template of withRepeat) {
+    const repeat = template.repeat
+    if (!repeat) continue
+    const normalized = normalizeTemplateRepeat(repeat)
+    const horizonDays = repeatHorizonDays(normalized)
+    await applyRepeatForTemplate(template.id, normalized, today, horizonDays)
   }
 }
 

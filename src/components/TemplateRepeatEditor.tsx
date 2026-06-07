@@ -3,6 +3,7 @@ import type { RepeatUnit, TemplateRepeat } from '../lib/templateRepeat'
 import {
   defaultTemplateRepeat,
   formatTemplateRepeat,
+  getRepeatWeekdays,
   normalizeTemplateRepeat,
   repeatDefaultsForUnit,
   repeatNeedsOnDay,
@@ -59,6 +60,20 @@ export function TemplateRepeatEditor({ repeat, onChange }: Props) {
 
   const normalized = repeat ? normalizeTemplateRepeat(repeat) : undefined
   const preview = normalized ? formatTemplateRepeat(normalized) : null
+  const selectedWeekdays = normalized ? getRepeatWeekdays(normalized) : []
+
+  const toggleWeekday = (day: number) => {
+    if (!normalized) return
+    const current = getRepeatWeekdays(normalized)
+    let next: number[]
+    if (current.includes(day)) {
+      next = current.filter((d) => d !== day)
+      if (!next.length) next = [day]
+    } else {
+      next = [...current, day].sort((a, b) => a - b)
+    }
+    patch({ weekdays: next })
+  }
 
   return (
     <section className={`repeat-editor${open ? ' repeat-editor--open' : ''}`}>
@@ -142,14 +157,14 @@ export function TemplateRepeatEditor({ repeat, onChange }: Props) {
                   <span className="repeat-row-label">Repeat on</span>
                   <div className="repeat-row-controls repeat-on-controls">
                     {normalized.unit === 'week' ? (
-                      <div className="repeat-weekdays" role="group" aria-label="Day of week">
+                      <div className="repeat-weekdays" role="group" aria-label="Days of week">
                         {WEEKDAYS.map((day) => (
                           <button
                             key={day}
                             type="button"
-                            className={`repeat-weekday${normalized.weekday === day ? ' repeat-weekday--active' : ''}`}
-                            aria-pressed={normalized.weekday === day}
-                            onClick={() => patch({ weekday: day })}
+                            className={`repeat-weekday${selectedWeekdays.includes(day) ? ' repeat-weekday--active' : ''}`}
+                            aria-pressed={selectedWeekdays.includes(day)}
+                            onClick={() => toggleWeekday(day)}
                           >
                             {weekdayLabel(day)}
                           </button>

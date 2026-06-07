@@ -3,25 +3,6 @@ import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 
 export default defineConfig({
-  server: {
-    proxy: {
-      // Notion API blocks browser CORS; same-origin proxy avoids "Failed to fetch".
-      '/api/notion': {
-        target: 'https://api.notion.com',
-        changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api\/notion/, ''),
-      },
-    },
-  },
-  preview: {
-    proxy: {
-      '/api/notion': {
-        target: 'https://api.notion.com',
-        changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api\/notion/, ''),
-      },
-    },
-  },
   plugins: [
     react(),
     VitePWA({

@@ -36,8 +36,9 @@
   color: var(--ink-muted);
 }
 
-.duration-field {
-  max-width: 140px;
+.duration-label .duration-field {
+  width: 7rem;
+  max-width: none;
 }
 
 .section-label {

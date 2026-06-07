@@ -252,6 +252,19 @@ export class ChecklistsDB extends Dexie {
             if (list.defaultDurationMin == null) list.defaultDurationMin = 60
           })
       )
+
+    this.version(13).stores({
+      checklistTemplates: 'id, sortOrder, updatedAt',
+      templateItems: 'id, templateId, parentItemId, sortOrder',
+      days: 'id, date',
+      dayInstances: 'id, dayId, sortOrder, addedAt, scheduledStartMs',
+      dayFreeTimes: 'id, dayId, sortOrder',
+      dayInstanceItems: 'id, instanceId, parentItemId, sortOrder',
+      taskLists: 'id, sortOrder, updatedAt',
+      taskListItems: 'id, taskListId, parentItemId, importance, sortOrder, completedAt, deadline',
+      syncMeta: 'id',
+      syncQueue: 'id, createdAt',
+    })
   }
 }
 

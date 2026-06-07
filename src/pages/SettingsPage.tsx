@@ -1,24 +1,12 @@
-import { useEffect, useState } from 'react'
 import { useTheme, type Theme } from '../context/ThemeContext'
-import { hasFullNotionSchema, hasNotionConfig } from '../sync/notionClient'
-import { runSync, subscribeSyncStatus } from '../sync/syncEngine'
+import { supabase } from '../lib/supabaseClient'
 import './SettingsPage.css'
 
 export function SettingsPage() {
   const { theme, setTheme } = useTheme()
-  const [syncStatus, setSyncStatus] = useState<string | null>(null)
-  const [syncBusy, setSyncBusy] = useState(false)
 
-  const notionReady = hasNotionConfig() && hasFullNotionSchema()
-
-  useEffect(() => subscribeSyncStatus(({ busy, message }) => {
-    setSyncBusy(busy)
-    if (message) setSyncStatus(message)
-  }), [])
-
-  const handleSync = async () => {
-    const result = await runSync()
-    if (!syncBusy) setSyncStatus(result.message)
+  const handleSignOut = async () => {
+    await supabase.auth.signOut()
   }
 
   return (
@@ -45,21 +33,17 @@ export function SettingsPage() {
       </section>
 
       <section className="settings-section">
-        <h2 className="section-label">Notion</h2>
+        <h2 className="section-label">Account</h2>
         <p className="settings-hint">
-          {notionReady
-            ? 'Notion is the source of truth. The app syncs on load, when you return to the tab, and after edits.'
-            : 'Add VITE_NOTION_TOKEN and database IDs to .env.local, then rebuild.'}
+          Changes save instantly on this device and sync to the cloud when you&apos;re online.
         </p>
         <button
           type="button"
-          className="btn btn-primary"
-          disabled={!notionReady || syncBusy}
-          onClick={() => void handleSync()}
+          className="btn btn-ghost"
+          onClick={() => void handleSignOut()}
         >
-          {syncBusy ? 'Syncing…' : 'Sync now'}
+          Sign out
         </button>
-        {syncStatus && <p className="sync-status">{syncStatus}</p>}
       </section>
     </>
   )

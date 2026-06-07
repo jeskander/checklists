@@ -16,8 +16,10 @@ export interface TemplateRepeat {
   timeHHMM: string
   /** First date the rule applies (YYYY-MM-DD) */
   anchorDate: string
-  /** 0 = Sunday … 6 = Saturday — for `week` */
+  /** 0 = Sunday … 6 = Saturday — for `week` (legacy single day) */
   weekday?: number
+  /** 0 = Sunday … 6 = Saturday — for `week` (one or more days) */
+  weekdays?: number[]
   /** 1–31 — for `month` and `year` */
   dayOfMonth?: number
   /** 1–12 — for `year` only */
@@ -41,6 +43,24 @@ export function weekdayLabel(weekday: number): string {
   return WEEKDAY_LABELS[weekday] ?? WEEKDAY_LABELS[0]
 }
 
+/** Selected weekdays for a weekly repeat (defaults to Sunday). */
+export function getRepeatWeekdays(repeat: TemplateRepeat | LegacyTemplateRepeat): number[] {
+  const normalized = 'unit' in repeat ? repeat : null
+  if (normalized?.weekdays?.length) {
+    return [...normalized.weekdays].sort((a, b) => a - b)
+  }
+  if (normalized?.weekday != null) return [normalized.weekday]
+  if ('weekday' in repeat && repeat.weekday != null) return [repeat.weekday]
+  return [0]
+}
+
+function withWeekdays(repeat: TemplateRepeat): TemplateRepeat {
+  if (repeat.unit !== 'week') return repeat
+  const weekdays = getRepeatWeekdays(repeat)
+  const { weekday: _w, ...rest } = repeat
+  return { ...rest, weekdays }
+}
+
 export function monthLabel(month: number): string {
   return MONTH_LABELS[month - 1] ?? MONTH_LABELS[0]
 }
@@ -49,17 +69,19 @@ export function normalizeTemplateRepeat(
   repeat: TemplateRepeat | LegacyTemplateRepeat
 ): TemplateRepeat {
   if ('unit' in repeat && repeat.every >= 1) {
-    return clampRepeat(repeat)
+    return clampRepeat(withWeekdays(repeat))
   }
   const legacy = repeat as LegacyTemplateRepeat
   const today = todayDateString()
-  return clampRepeat({
-    every: 1,
-    unit: 'week',
-    weekday: legacy.weekday,
-    timeHHMM: legacy.timeHHMM,
-    anchorDate: today,
-  })
+  return clampRepeat(
+    withWeekdays({
+      every: 1,
+      unit: 'week',
+      weekdays: [legacy.weekday],
+      timeHHMM: legacy.timeHHMM,
+      anchorDate: today,
+    })
+  )
 }
 
 function clampRepeat(repeat: TemplateRepeat): TemplateRepeat {
@@ -72,7 +94,7 @@ export function defaultTemplateRepeat(referenceDate = new Date()): TemplateRepea
   return {
     every: 1,
     unit: 'week',
-    weekday: referenceDate.getDay(),
+    weekdays: [referenceDate.getDay()],
     timeHHMM: '09:00',
     anchorDate,
   }
@@ -91,8 +113,9 @@ export function formatTemplateRepeat(raw: TemplateRepeat | LegacyTemplateRepeat)
       : `Every ${repeat.every} ${plural}`
 
   let on = ''
-  if (repeat.unit === 'week' && repeat.weekday != null) {
-    on = ` on ${weekdayLabel(repeat.weekday)}`
+  if (repeat.unit === 'week') {
+    const weekdays = getRepeatWeekdays(repeat)
+    on = ` on ${weekdays.map(weekdayLabel).join(', ')}`
   } else if (repeat.unit === 'month' && repeat.dayOfMonth != null) {
     on = ` on the ${ordinal(repeat.dayOfMonth)}`
   } else if (repeat.unit === 'year' && repeat.month != null && repeat.dayOfMonth != null) {
@@ -170,9 +193,9 @@ export function isRepeatDueOnDate(
       return diff % repeat.every === 0
     }
     case 'week': {
-      const weekday = repeat.weekday ?? 0
-      if (d.getDay() !== weekday) return false
-      const aligned = alignToWeekday(repeat.anchorDate, weekday)
+      const weekdays = getRepeatWeekdays(repeat)
+      if (!weekdays.includes(d.getDay())) return false
+      const aligned = alignToWeekday(repeat.anchorDate, d.getDay())
       const weeks = Math.floor(daysBetween(aligned, dateStr) / 7)
       return weeks % repeat.every === 0
     }
@@ -225,10 +248,10 @@ export function repeatScheduledStartMs(
 export function repeatDefaultsForUnit(
   unit: RepeatUnit,
   referenceDate = new Date()
-): Pick<TemplateRepeat, 'weekday' | 'dayOfMonth' | 'month'> {
+): Pick<TemplateRepeat, 'weekdays' | 'dayOfMonth' | 'month'> {
   switch (unit) {
     case 'week':
-      return { weekday: referenceDate.getDay() }
+      return { weekdays: [referenceDate.getDay()] }
     case 'month':
       return { dayOfMonth: referenceDate.getDate() }
     case 'year':

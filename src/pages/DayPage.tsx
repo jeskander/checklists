@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useEffect, useMemo, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
+import { useNavigate, useParams } from 'react-router-dom'
 import {
   DndContext,
   DragOverlay,
@@ -18,7 +18,6 @@ import {
   SortableContext,
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable'
-import { db } from '../db/database'
 import {
   addAdHocInstance,
   addInstanceFromTaskList,
@@ -32,13 +31,14 @@ import {
   updateInstanceItem,
   formatDateLabel,
   getOrCreateDay,
-  getDayByDate,
   linkInstancesAsAlternatives,
   stackInstanceInColumn,
   unlinkInstanceFromAltGroup,
-  listInstanceItems,
+  listDayFreeTimes,
   resetInstance,
   restoreInstanceReset,
+  restoreDayInstance,
+  restoreDayInstanceItems,
   applyFlatTimelineOrder,
   applyInstanceScheduledStartChange,
   clearFreeBlockAltGroup,
@@ -50,15 +50,14 @@ import {
   updateInstance,
   listDayInstances,
 } from '../services/days'
-import { listTemplates } from '../services/templates'
-import { getTaskList, listTaskLists, listOpenTasksDueOn, listOpenTasksOverdue } from '../services/taskLists'
+import { getTaskList, listOpenTasksDueOn, listOpenTasksOverdue } from '../services/taskLists'
+import { db } from '../db/database'
 import { DayDeadlineBanner } from '../components/DayDeadlineBanner'
 import { todayDateString } from '../lib/ids'
 import { setLastCalendarDate } from '../lib/lastCalendarDate'
 import { useUndo } from '../context/UndoContext'
 import type { ItemTreeStructureRow } from '../lib/itemTreeMove'
 import { reorderIds } from '../lib/reorder'
-import { runSync } from '../sync/syncEngine'
 import { DayInstanceTile } from '../components/DayInstanceTile'
 import { DayTimeGap } from '../components/DayTimeGap'
 import { DaySplitRow } from '../components/DaySplitRow'
@@ -107,8 +106,6 @@ export function DayPage() {
   const [draggingId, setDraggingId] = useState<string | null>(null)
   const [dropHint, setDropHint] = useState<{ targetId: string; side: 'left' | 'right' } | null>(null)
   const [stackHintId, setStackHintId] = useState<string | null>(null)
-  const [templates, setTemplates] = useState<Awaited<ReturnType<typeof listTemplates>>>([])
-  const [taskLists, setTaskLists] = useState<Awaited<ReturnType<typeof listTaskLists>>>([])
 
   const day = useLiveQuery(
     () => (date ? db.days.where('date').equals(date).first() : undefined),
@@ -116,26 +113,55 @@ export function DayPage() {
   )
 
   useEffect(() => {
-    if (!date) return
-    void getDayByDate(date).then((existing) => {
-      if (!existing) void getOrCreateDay(date)
-    })
-  }, [date])
+    if (!date || day) return
+    void getOrCreateDay(date)
+  }, [date, day])
 
   const instances = useLiveQuery(
-    () => (day ? db.dayInstances.where('dayId').equals(day.id).sortBy('sortOrder') : []),
+    () => (day?.id ? db.dayInstances.where('dayId').equals(day.id).sortBy('sortOrder') : []),
     [day?.id]
   )
 
   const freeTimes = useLiveQuery(
-    () => (day ? db.dayFreeTimes.where('dayId').equals(day.id).sortBy('sortOrder') : []),
+    () => (day?.id ? db.dayFreeTimes.where('dayId').equals(day.id).sortBy('sortOrder') : []),
     [day?.id]
   )
 
-  const dueTasks = useLiveQuery(() => (date ? listOpenTasksDueOn(date) : []), [date])
+  const dueTasks = useLiveQuery(
+    () => (date ? listOpenTasksDueOn(date) : []),
+    [date]
+  )
+
   const overdueTasks = useLiveQuery(
     () => (date && date === todayDateString() ? listOpenTasksOverdue(date) : []),
     [date]
+  )
+
+  const instanceIds = useMemo(() => (instances ?? []).map((i) => i.id), [instances])
+  const instanceIdsKey = instanceIds.join(',')
+
+  const allItems = useLiveQuery(
+    async () => {
+      if (!instanceIds.length) return {}
+      const items = await db.dayInstanceItems.where('instanceId').anyOf(instanceIds).toArray()
+      const map: Record<string, DayInstanceItem[]> = {}
+      for (const item of items.sort((a, b) => a.sortOrder - b.sortOrder)) {
+        if (!map[item.instanceId]) map[item.instanceId] = []
+        map[item.instanceId].push(item)
+      }
+      return map
+    },
+    [instanceIdsKey]
+  )
+
+  const templates = useLiveQuery(
+    () => (pickerOpen ? db.checklistTemplates.orderBy('sortOrder').toArray() : []),
+    [pickerOpen]
+  )
+
+  const taskLists = useLiveQuery(
+    () => (pickerOpen ? db.taskLists.orderBy('sortOrder').toArray() : []),
+    [pickerOpen]
   )
 
   useEffect(() => {
@@ -147,33 +173,19 @@ export function DayPage() {
     if (date) setLastCalendarDate(date)
   }, [date])
 
-  const allItems = useLiveQuery(
-    async () => {
-      if (!instances?.length) return {}
-      const map: Record<string, DayInstanceItem[]> = {}
-      for (const inst of instances) {
-        map[inst.id] = await listInstanceItems(inst.id)
-      }
-      return map
-    },
-    [instances?.map((i) => i.id).join(',')]
-  )
-
   useEffect(() => {
     if (!pickerOpen) return
     setPickerQuery('')
-    void listTemplates().then(setTemplates)
-    void listTaskLists().then(setTaskLists)
   }, [pickerOpen])
 
   const pickerQueryTrim = pickerQuery.trim()
   const pickerQueryNorm = pickerQueryTrim.toLowerCase()
   const filteredTemplates = pickerQueryNorm
-    ? templates.filter((t) => t.title.toLowerCase().includes(pickerQueryNorm))
-    : templates
+    ? (templates ?? []).filter((t) => t.title.toLowerCase().includes(pickerQueryNorm))
+    : (templates ?? [])
   const filteredTaskLists = pickerQueryNorm
-    ? taskLists.filter((t) => t.title.toLowerCase().includes(pickerQueryNorm))
-    : taskLists
+    ? (taskLists ?? []).filter((t) => t.title.toLowerCase().includes(pickerQueryNorm))
+    : (taskLists ?? [])
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }))
 
@@ -275,7 +287,7 @@ export function DayPage() {
       const activeFree = currentFreeTimes.find((f) => f.id === freeId)
       if (activeFree?.altGroupId) {
         await clearFreeBlockAltGroup(freeId)
-        currentFreeTimes = await db.dayFreeTimes.where('dayId').equals(day.id).sortBy('sortOrder')
+        currentFreeTimes = await listDayFreeTimes(day.id)
       }
     }
 
@@ -328,8 +340,8 @@ export function DayPage() {
       if (detailId === inst.id) setDetailId(null)
       await deleteInstance(inst.id)
       showUndo('Block removed', async () => {
-        await db.dayInstances.put(snapInst)
-        await db.dayInstanceItems.bulkPut(snapItems)
+        await restoreDayInstance(snapInst)
+        await restoreDayInstanceItems(snapItems)
       })
     },
   })
@@ -489,7 +501,6 @@ export function DayPage() {
             setEditScheduleOnOpen(false)
           }}
           onDone={() => {
-            void runSync()
             setDetailId(null)
             setEditTitleOnOpen(false)
             setEditScheduleOnOpen(false)
@@ -539,7 +550,7 @@ export function DayPage() {
                 </button>
               </div>
             ) : null}
-            {templates.length > 0 && (
+            {(templates ?? []).length > 0 && (
               <>
                 <p className="picker-label">From library</p>
                 {filteredTemplates.length > 0 ? (
@@ -560,7 +571,7 @@ export function DayPage() {
                 ) : null}
               </>
             )}
-            {taskLists.length > 0 && (
+            {(taskLists ?? []).length > 0 && (
               <>
                 <p className="picker-label">From task lists</p>
                 <div className="chip-row picker-results">
@@ -591,7 +602,7 @@ export function DayPage() {
 
   async function handleAddFromTaskList(taskListId: string) {
     if (!day) return
-    const taskList = taskLists.find((t) => t.id === taskListId) ?? (await getTaskList(taskListId))
+    const taskList = (taskLists ?? []).find((t) => t.id === taskListId) ?? (await getTaskList(taskListId))
     const durationMin = taskList?.defaultDurationMin ?? 60
     await addInstanceFromTaskList(taskListId, day.id, durationMin, pickerInsert ?? undefined)
     closePicker()
