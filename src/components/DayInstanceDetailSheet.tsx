@@ -34,6 +34,7 @@ type Props = {
   onAddItemAfter: (afterItemId: string) => Promise<string | void>
   onReparentItem: (itemId: string, parentId?: string) => Promise<void>
   onApplyItemStructure: (structure: ItemTreeStructureRow[]) => Promise<void>
+  onDeleteItem: (itemId: string) => void
   editTitleOnOpen?: boolean
   editScheduleOnOpen?: boolean
 }
@@ -57,6 +58,7 @@ export function DayInstanceDetailSheet({
   onAddItemAfter,
   onReparentItem,
   onApplyItemStructure,
+  onDeleteItem,
   editTitleOnOpen,
   editScheduleOnOpen,
 }: Props) {
@@ -141,6 +143,7 @@ export function DayInstanceDetailSheet({
                 onApplyStructure={onApplyItemStructure}
                 onUpdateTitle={onUpdateItemTitle}
                 onUpdateDuration={instance.sourceTaskListId ? onUpdateItemDuration : undefined}
+                onDelete={onDeleteItem}
                 onAddAfter={onAddItemAfter}
                 onReparent={onReparentItem}
               />

@@ -27,6 +27,7 @@ import {
   addInstanceItemAfter,
   applyInstanceItemTree,
   deleteInstance,
+  deleteInstanceItem,
   reparentInstanceItem,
   updateInstanceItem,
   formatDateLabel,
@@ -57,6 +58,7 @@ import { todayDateString } from '../lib/ids'
 import { setLastCalendarDate } from '../lib/lastCalendarDate'
 import { useUndo } from '../context/UndoContext'
 import type { ItemTreeStructureRow } from '../lib/itemTreeMove'
+import { collectDescendantIds } from '../lib/completion'
 import { reorderIds } from '../lib/reorder'
 import { DayInstanceTile } from '../components/DayInstanceTile'
 import { DayTimeGap } from '../components/DayTimeGap'
@@ -334,6 +336,18 @@ export function DayPage() {
     onReparentItem: (itemId: string, parentId?: string) => reparentInstanceItem(itemId, parentId),
     onApplyItemStructure: (structure: ItemTreeStructureRow[]) =>
       applyInstanceItemTree(inst.id, structure),
+    onDeleteItem: async (itemId: string) => {
+      const instItems = allItems?.[inst.id] ?? []
+      const snap = instItems.find((i) => i.id === itemId)
+      if (!snap) return
+      const descendantSnaps = instItems.filter((i) =>
+        collectDescendantIds(instItems, itemId).includes(i.id)
+      )
+      await deleteInstanceItem(itemId)
+      showUndo('Item deleted', async () => {
+        await restoreDayInstanceItems([snap, ...descendantSnaps])
+      })
+    },
     onDelete: async () => {
       const snapInst = { ...inst }
       const snapItems = [...(allItems?.[inst.id] ?? [])]
