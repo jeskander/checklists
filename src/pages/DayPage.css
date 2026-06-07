@@ -57,7 +57,6 @@
   gap: 0.35rem;
   align-items: stretch;
   margin-bottom: 0.65rem;
-  touch-action: none;
 }
 
 .sortable-day-wrap:last-child {
