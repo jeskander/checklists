@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext'
 import { useTheme, type Theme } from '../context/ThemeContext'
 import { db } from '../db/database'
 import { supabase } from '../lib/supabaseClient'
-import { runSync, subscribeSyncStatus } from '../sync/syncEngine'
+import { resetLocalFromCloud, runSync, subscribeSyncStatus } from '../sync/syncEngine'
 import './SettingsPage.css'
 
 function formatLastSynced(ts?: number): string {
@@ -28,6 +28,21 @@ export function SettingsPage() {
 
   const handleSyncNow = () => {
     void runSync()
+  }
+
+  const handleResetFromCloud = () => {
+    const pendingWarning =
+      pendingCount > 0
+        ? `\n\n${pendingCount} unsynced change${pendingCount === 1 ? '' : 's'} on this device will be lost.`
+        : ''
+    if (
+      !window.confirm(
+        `Clear all local data on this device and re-download from the cloud?${pendingWarning}`
+      )
+    ) {
+      return
+    }
+    void resetLocalFromCloud()
   }
 
   return (
@@ -80,6 +95,20 @@ export function SettingsPage() {
               {pendingCount} change{pendingCount === 1 ? '' : 's'} waiting to upload
             </p>
           )}
+          <div className="settings-danger-zone">
+            <p className="settings-hint">
+              If this device looks wrong or stuck, reset local data and download a fresh copy
+              from the cloud. Unsynced changes on this device will be lost.
+            </p>
+            <button
+              type="button"
+              className="btn btn-ghost settings-danger-btn"
+              disabled={syncStatus.busy || !syncStatus.online}
+              onClick={handleResetFromCloud}
+            >
+              {syncStatus.busy ? 'Resetting…' : 'Reset from cloud'}
+            </button>
+          </div>
         </section>
       )}
 

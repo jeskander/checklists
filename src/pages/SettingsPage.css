@@ -26,3 +26,18 @@
   font-size: 0.85rem;
   color: var(--ink-muted);
 }
+
+.settings-danger-zone {
+  margin-top: 1.5rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--border);
+}
+
+.settings-danger-btn {
+  color: var(--danger, #b42318);
+  border-color: color-mix(in srgb, var(--danger, #b42318) 35%, var(--border));
+}
+
+.settings-danger-btn:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--danger, #b42318) 8%, transparent);
+}

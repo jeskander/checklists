@@ -12,6 +12,7 @@ import {
   templateItemToRow,
   templateToRow,
 } from './supabaseMappers'
+import { clearLocalStore } from '../db/clearLocalStore'
 import { pullFromSupabase, isLocalStoreEmpty } from './bootstrapPull'
 
 let syncTimer: ReturnType<typeof setTimeout> | null = null
@@ -254,6 +255,15 @@ export async function runSync(opts?: { fullPull?: boolean }): Promise<{ ok: bool
 export async function bootstrapSync(): Promise<void> {
   const empty = await isLocalStoreEmpty()
   await runSync({ fullPull: empty })
+}
+
+/** Wipe local IndexedDB and re-download everything from Supabase. */
+export async function resetLocalFromCloud(): Promise<{ ok: boolean; message: string }> {
+  if (!navigator.onLine) {
+    return { ok: false, message: 'Offline — connect to the internet first' }
+  }
+  await clearLocalStore()
+  return runSync({ fullPull: true })
 }
 
 export function setSyncOnline(online: boolean): void {
