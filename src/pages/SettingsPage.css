@@ -27,6 +27,10 @@
   color: var(--ink-muted);
 }
 
+.sync-status-warn {
+  color: var(--danger, #b42318);
+}
+
 .settings-danger-zone {
   margin-top: 1.5rem;
   padding-top: 1.25rem;

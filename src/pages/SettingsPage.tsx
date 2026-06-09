@@ -27,17 +27,13 @@ export function SettingsPage() {
   }
 
   const handleSyncNow = () => {
-    void runSync()
+    void runSync({ fullPull: true })
   }
 
   const handleResetFromCloud = () => {
-    const pendingWarning =
-      pendingCount > 0
-        ? `\n\n${pendingCount} unsynced change${pendingCount === 1 ? '' : 's'} on this device will be lost.`
-        : ''
     if (
       !window.confirm(
-        `Clear all local data on this device and re-download from the cloud?${pendingWarning}`
+        'Clear all local data on this device and re-download from the cloud? Any failed uploads on this device will be discarded.'
       )
     ) {
       return
@@ -72,8 +68,8 @@ export function SettingsPage() {
         <section className="settings-section">
           <h2 className="section-label">Sync</h2>
           <p className="settings-hint">
-            Changes save instantly on this device and sync to the cloud in the background.
-            Use this if another device looks out of date.
+            This app requires an internet connection. Your data is stored in the cloud and
+            cached locally for speed. On each visit the app downloads a fresh copy from the cloud.
           </p>
           <button
             type="button"
@@ -85,20 +81,20 @@ export function SettingsPage() {
           </button>
           <p className="sync-status">
             {syncStatus.message ||
-              (syncStatus.online ? 'Up to date' : 'Offline — changes saved locally')}
+              (syncStatus.online ? 'Up to date' : 'Offline — connect to save changes')}
           </p>
           <p className="sync-status">
             Last synced: {formatLastSynced(syncMeta?.lastPushAt)}
           </p>
           {pendingCount > 0 && (
-            <p className="sync-status">
-              {pendingCount} change{pendingCount === 1 ? '' : 's'} waiting to upload
+            <p className="sync-status sync-status-warn">
+              {pendingCount} change{pendingCount === 1 ? '' : 's'} failed to upload — tap Sync now to retry
             </p>
           )}
           <div className="settings-danger-zone">
             <p className="settings-hint">
-              If this device looks wrong or stuck, reset local data and download a fresh copy
-              from the cloud. Unsynced changes on this device will be lost.
+              If this device looks wrong or stuck, reset local cache and download a fresh copy
+              from the cloud.
             </p>
             <button
               type="button"

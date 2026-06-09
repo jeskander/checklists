@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
 import { processCalendarRepeats } from '../services/templateRepeat'
+import { OfflineBanner } from './OfflineBanner'
 import { QuickAddTask } from './QuickAddTask'
 import { Snackbar } from './Snackbar'
 import './Layout.css'
@@ -22,6 +23,7 @@ export function Layout() {
 
   return (
     <div className="app-shell">
+      <OfflineBanner />
       <main className="main-content">
         <Outlet />
       </main>

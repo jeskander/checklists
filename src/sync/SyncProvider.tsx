@@ -1,9 +1,16 @@
 import { useEffect, useRef } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabaseClient'
-import { bootstrapSync, queueSync, runSync, setSyncOnline } from './syncEngine'
+import { handleRemoteDelete } from './remoteDelete'
+import {
+  bootstrapSync,
+  queuePull,
+  resetBootstrapState,
+  runSync,
+  setSyncOnline,
+} from './syncEngine'
 
-const VISIBILITY_SYNC_MIN_MS = 60_000
+const VISIBILITY_SYNC_MIN_MS = 30_000
 
 const REALTIME_TABLES = [
   'library_blocks',
@@ -14,7 +21,7 @@ const REALTIME_TABLES = [
   'day_instance_items',
 ] as const
 
-/** Bootstrap pull on login; push/pull on reconnect and tab focus. */
+/** Online-first: full cloud load on login; live pull on remote changes. */
 export function SyncProvider() {
   const { session } = useAuth()
   const lastSyncAt = useRef(0)
@@ -23,6 +30,7 @@ export function SyncProvider() {
   useEffect(() => {
     if (!session) {
       bootstrapped.current = false
+      resetBootstrapState()
       return
     }
 
@@ -35,7 +43,6 @@ export function SyncProvider() {
   useEffect(() => {
     const onOnline = () => {
       setSyncOnline(true)
-      queueSync()
     }
     const onOffline = () => setSyncOnline(false)
 
@@ -56,7 +63,7 @@ export function SyncProvider() {
       if (document.visibilityState !== 'visible') return
       if (Date.now() - lastSyncAt.current < VISIBILITY_SYNC_MIN_MS) return
       lastSyncAt.current = Date.now()
-      void runSync()
+      void runSync({ fullPull: true, pullOnly: true })
     }
 
     document.addEventListener('visibilitychange', onVisible)
@@ -72,8 +79,22 @@ export function SyncProvider() {
       channel.on(
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         'postgres_changes' as any,
-        { event: '*', schema: 'public', table },
-        () => queueSync()
+        { event: 'DELETE', schema: 'public', table },
+        (payload: { old: Record<string, unknown> }) => {
+          void handleRemoteDelete(table, payload.old ?? {})
+        }
+      )
+      channel.on(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        'postgres_changes' as any,
+        { event: 'INSERT', schema: 'public', table },
+        () => queuePull()
+      )
+      channel.on(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        'postgres_changes' as any,
+        { event: 'UPDATE', schema: 'public', table },
+        () => queuePull()
       )
     }
 

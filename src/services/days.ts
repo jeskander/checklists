@@ -25,6 +25,7 @@ import { listTemplateItems, getTemplate } from './templates'
 import { completeTaskListItem, getTaskList, listTaskListItems, restoreTaskListItem } from './taskLists'
 import { packTasksForSession } from '../lib/packTaskList'
 import { syncDayInstanceItemToTaskList } from '../lib/taskListItemSync'
+import { fetchDayByDateFromCloud } from '../sync/bootstrapPull'
 import { enqueueSync } from '../sync/syncEngine'
 
 export type FreeSlotInsert = {
@@ -37,6 +38,14 @@ export type FreeSlotInsert = {
 export async function getOrCreateDay(date: string): Promise<Day> {
   const existing = await db.days.where('date').equals(date).first()
   if (existing) return existing
+
+  if (navigator.onLine) {
+    const remote = await fetchDayByDateFromCloud(date)
+    if (remote) {
+      await db.days.put(remote)
+      return remote
+    }
+  }
 
   const id = newId()
   const day: Day = { id, date, updatedAt: now() }

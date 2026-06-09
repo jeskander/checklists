@@ -7,6 +7,7 @@ import { collectDescendantIds, getChildren } from '../lib/completion'
 import { flattenItemTree, type ItemTreeStructureRow } from '../lib/itemTreeMove'
 import { canReparentUnder } from '../lib/listItems'
 import { syncTaskListItemToDayItems } from '../lib/taskListItemSync'
+import { fetchInboxFromCloud } from '../sync/bootstrapPull'
 import { enqueueSync } from '../sync/syncEngine'
 
 export { INBOX_LIST_TITLE, isInboxList } from '../lib/inbox'
@@ -94,6 +95,14 @@ export async function ensureInboxList(): Promise<TaskList> {
       existing = { ...existing, sortOrder: 0 }
     }
     return existing
+  }
+
+  if (navigator.onLine) {
+    const remote = await fetchInboxFromCloud()
+    if (remote) {
+      await db.taskLists.put(remote)
+      return remote
+    }
   }
 
   const list: TaskList = {

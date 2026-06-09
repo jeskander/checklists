@@ -1,8 +1,11 @@
+import { useEffect, useState } from 'react'
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
+import { BootstrapScreen } from './components/BootstrapScreen'
 import { Layout } from './components/Layout'
 import { ThemeProvider } from './context/ThemeContext'
 import { UndoProvider } from './context/UndoContext'
 import { AuthProvider, useAuth } from './context/AuthContext'
+import { bootstrapSync, subscribeBootstrap } from './sync/syncEngine'
 import { LibraryPage } from './pages/LibraryPage'
 import { TemplateEditorPage } from './pages/TemplateEditorPage'
 import { CalendarPage } from './pages/CalendarPage'
@@ -17,6 +20,21 @@ import { ResetPasswordPage } from './pages/ResetPasswordPage'
 import { QueryProvider } from './context/QueryProvider'
 function AppRoutes() {
   const { session, loading, isRecovery } = useAuth()
+  const [bootReady, setBootReady] = useState(false)
+  const [bootMessage, setBootMessage] = useState('Loading from cloud…')
+
+  useEffect(() => {
+    if (!session) {
+      setBootReady(true)
+      return
+    }
+    setBootReady(false)
+    setBootMessage('Loading from cloud…')
+    return subscribeBootstrap((ready, message) => {
+      setBootReady(ready)
+      setBootMessage(message)
+    })
+  }, [session])
 
   if (loading) return null
 
@@ -38,6 +56,15 @@ function AppRoutes() {
         <Route path="/reset-password" element={<ResetPasswordPage />} />
         <Route path="*" element={<LoginPage />} />
       </Routes>
+    )
+  }
+
+  if (!bootReady) {
+    return (
+      <BootstrapScreen
+        message={bootMessage}
+        onRetry={() => void bootstrapSync()}
+      />
     )
   }
 

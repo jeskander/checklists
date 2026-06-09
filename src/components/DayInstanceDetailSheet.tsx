@@ -63,10 +63,15 @@ export function DayInstanceDetailSheet({
   editScheduleOnOpen,
 }: Props) {
   const showStartNow = canStartTimerNow(instance)
-  const [openSection, setOpenSection] = useState<DetailSection | null>('items')
+  const [openSections, setOpenSections] = useState<Set<DetailSection>>(() => new Set(['items']))
 
   const toggleSection = (section: DetailSection) => {
-    setOpenSection((prev) => (prev === section ? null : section))
+    setOpenSections((prev) => {
+      const next = new Set(prev)
+      if (next.has(section)) next.delete(section)
+      else next.add(section)
+      return next
+    })
   }
 
   useEffect(() => {
@@ -132,7 +137,7 @@ export function DayInstanceDetailSheet({
           <CollapsibleSection
             title="Items"
             count={items.length}
-            open={openSection === 'items'}
+            open={openSections.has('items')}
             onToggle={() => toggleSection('items')}
           >
             {items.length > 0 ? (
@@ -155,7 +160,7 @@ export function DayInstanceDetailSheet({
 
           <CollapsibleSection
             title="Notes"
-            open={openSection === 'notes'}
+            open={openSections.has('notes')}
             onToggle={() => toggleSection('notes')}
           >
             <RichNote key={instance.id} content={instance.noteJson} onChange={onNoteChange} />
