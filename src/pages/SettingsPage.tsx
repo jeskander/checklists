@@ -4,7 +4,12 @@ import { useAuth } from '../context/AuthContext'
 import { useTheme, type Theme } from '../context/ThemeContext'
 import { db } from '../db/database'
 import { supabase } from '../lib/supabaseClient'
-import { resetLocalFromCloud, runSync, subscribeSyncStatus } from '../sync/syncEngine'
+import {
+  resetLocalFromCloud,
+  runSync,
+  subscribeSyncStatus,
+  type SyncActivity,
+} from '../sync/syncEngine'
 import './SettingsPage.css'
 
 function formatLastSynced(ts?: number): string {
@@ -15,12 +20,26 @@ function formatLastSynced(ts?: number): string {
 export function SettingsPage() {
   const { theme, setTheme } = useTheme()
   const { session } = useAuth()
-  const [syncStatus, setSyncStatus] = useState({ busy: false, message: '', online: true })
+  const [syncStatus, setSyncStatus] = useState<{
+    busy: boolean
+    activity: SyncActivity
+    message: string
+    online: boolean
+  }>({
+    busy: false,
+    activity: 'idle',
+    message: '',
+    online: true,
+  })
 
   const syncMeta = useLiveQuery(() => db.syncMeta.get('main'), [])
   const pendingCount = useLiveQuery(() => db.syncQueue.count(), []) ?? 0
 
   useEffect(() => subscribeSyncStatus(setSyncStatus), [])
+
+  const syncBusy = syncStatus.activity === 'sync' || syncStatus.activity === 'upload'
+  const resetBusy = syncStatus.activity === 'reset'
+  const anyBusy = syncStatus.busy
 
   const handleSignOut = async () => {
     await supabase.auth.signOut()
@@ -40,6 +59,18 @@ export function SettingsPage() {
     }
     void resetLocalFromCloud()
   }
+
+  const syncStatusMessage =
+    syncStatus.activity === 'sync' || syncStatus.activity === 'upload'
+      ? syncStatus.message
+      : syncStatus.activity === 'idle'
+        ? syncStatus.online
+          ? 'Up to date'
+          : 'Offline — connect to save changes'
+        : ''
+
+  const resetStatusMessage =
+    syncStatus.activity === 'reset' ? syncStatus.message : ''
 
   return (
     <>
@@ -74,15 +105,12 @@ export function SettingsPage() {
           <button
             type="button"
             className="btn btn-primary"
-            disabled={syncStatus.busy || !syncStatus.online}
+            disabled={anyBusy || !syncStatus.online}
             onClick={handleSyncNow}
           >
-            {syncStatus.busy ? 'Syncing…' : 'Sync now'}
+            {syncBusy ? 'Syncing…' : 'Sync now'}
           </button>
-          <p className="sync-status">
-            {syncStatus.message ||
-              (syncStatus.online ? 'Up to date' : 'Offline — connect to save changes')}
-          </p>
+          <p className="sync-status">{syncStatusMessage}</p>
           <p className="sync-status">
             Last synced: {formatLastSynced(syncMeta?.lastPushAt)}
           </p>
@@ -94,16 +122,19 @@ export function SettingsPage() {
           <div className="settings-danger-zone">
             <p className="settings-hint">
               If this device looks wrong or stuck, reset local cache and download a fresh copy
-              from the cloud.
+              from the cloud. This only downloads — it does not upload.
             </p>
             <button
               type="button"
               className="btn btn-ghost settings-danger-btn"
-              disabled={syncStatus.busy || !syncStatus.online}
+              disabled={anyBusy || !syncStatus.online}
               onClick={handleResetFromCloud}
             >
-              {syncStatus.busy ? 'Resetting…' : 'Reset from cloud'}
+              {resetBusy ? 'Resetting…' : 'Reset from cloud'}
             </button>
+            {resetStatusMessage && (
+              <p className="sync-status">{resetStatusMessage}</p>
+            )}
           </div>
         </section>
       )}

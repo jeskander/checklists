@@ -9,7 +9,9 @@ import {
 export type ListItemKeyboardActions = {
   items: ListItemRow[]
   itemId: string
-  onAddAfter: (afterItemId: string) => void | Promise<string | void>
+  value: string
+  onAddAfter: (afterItemId: string, title?: string) => void | Promise<string | void>
+  onCommitTitle: (itemId: string, title: string) => void
   onReparent: (itemId: string, parentItemId?: string) => void | Promise<void>
 }
 
@@ -17,12 +19,34 @@ export function handleListItemKeyDown(
   e: ReactKeyboardEvent<HTMLInputElement>,
   actions: ListItemKeyboardActions
 ): void {
-  const { items, itemId, onAddAfter, onReparent } = actions
+  const { items, itemId, value, onAddAfter, onCommitTitle, onReparent } = actions
   const item = items.find((i) => i.id === itemId)
 
   if (e.key === 'Enter') {
     e.preventDefault()
-    void Promise.resolve(onAddAfter(itemId)).then((newId) => {
+    const input = e.currentTarget
+    const pos = input.selectionStart ?? value.length
+
+    if (pos === 0) {
+      const prev = getPreviousSibling(items, itemId)
+      const anchorId = prev?.id ?? itemId
+      void Promise.resolve(onAddAfter(anchorId, '')).then((newId) => {
+        if (typeof newId === 'string') focusListItemInput(newId)
+      })
+      return
+    }
+
+    if (pos < value.length) {
+      const before = value.slice(0, pos)
+      const after = value.slice(pos)
+      onCommitTitle(itemId, before)
+      void Promise.resolve(onAddAfter(itemId, after)).then((newId) => {
+        if (typeof newId === 'string') focusListItemInput(newId, 16, 'start')
+      })
+      return
+    }
+
+    void Promise.resolve(onAddAfter(itemId, '')).then((newId) => {
       if (typeof newId === 'string') focusListItemInput(newId)
     })
     return

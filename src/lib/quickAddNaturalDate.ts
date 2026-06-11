@@ -78,6 +78,47 @@ function monthFromToken(token: string): number | undefined {
   return MONTHS[token.toLowerCase()]
 }
 
+type RelativeOffsetUnit = 'day' | 'week' | 'month' | 'year'
+
+function addRelativeOffset(ref: Date, amount: number, unit: RelativeOffsetUnit): string | undefined {
+  if (!Number.isFinite(amount) || amount < 1) return undefined
+  const d = new Date(ref.getFullYear(), ref.getMonth(), ref.getDate())
+  switch (unit) {
+    case 'day':
+      d.setDate(d.getDate() + amount)
+      break
+    case 'week':
+      d.setDate(d.getDate() + amount * 7)
+      break
+    case 'month':
+      d.setMonth(d.getMonth() + amount)
+      break
+    case 'year':
+      d.setFullYear(d.getFullYear() + amount)
+      break
+  }
+  return toIsoDate(d.getFullYear(), d.getMonth() + 1, d.getDate())
+}
+
+function relativeOffsetUnit(token: string): RelativeOffsetUnit | undefined {
+  switch (token.toLowerCase()) {
+    case 'day':
+    case 'days':
+      return 'day'
+    case 'week':
+    case 'weeks':
+      return 'week'
+    case 'month':
+    case 'months':
+      return 'month'
+    case 'year':
+    case 'years':
+      return 'year'
+    default:
+      return undefined
+  }
+}
+
 export interface NaturalDateMatch {
   start: number
   end: number
@@ -105,6 +146,23 @@ export function findNaturalDateTokens(text: string, ref = new Date()): NaturalDa
     const parts = match[2].toLowerCase().split(/\s+/)
     const iso = weekdayIso(parts[0] as 'this' | 'next', parts[1], ref)
     tokens.push({ start, end, text: text.slice(start, end), iso, partial: !iso })
+  }
+
+  const relativeOffset = /(^|\s)in\s+(\d{1,3})\s+(days?|weeks?|months?|years?)(?=\s|$|#|\*)/gi
+  while ((match = relativeOffset.exec(text)) !== null) {
+    const start = match.index + match[1].length
+    const actualEnd = match.index + match[0].length
+    if (tokens.some((t) => start >= t.start && start < t.end)) continue
+    const amount = parseInt(match[2], 10)
+    const unit = relativeOffsetUnit(match[3])
+    const iso = unit ? addRelativeOffset(ref, amount, unit) : undefined
+    tokens.push({
+      start,
+      end: actualEnd,
+      text: text.slice(start, actualEnd),
+      iso,
+      partial: !iso,
+    })
   }
 
   const weekdayOnly = new RegExp(`(^|\\s)(${WEEKDAY_PATTERN})(?=\\s|$|#|\\*)`, 'gi')
@@ -147,6 +205,25 @@ export function findNaturalDateTokens(text: string, ref = new Date()): NaturalDa
     const day = parseInt(match[3], 10)
     const y = match[4] ? parseInt(match[4], 10) : year
     const iso = month ? toIsoDate(y, month, day) : undefined
+    tokens.push({
+      start,
+      end: actualEnd,
+      text: text.slice(start, actualEnd),
+      iso,
+      partial: !iso,
+    })
+  }
+
+  const dayOfThisMonth = new RegExp(
+    `(^|\\s)(\\d{1,2})(?:st|nd|rd|th)(?!\\s+(?:of\\s+)?(?:${MONTH_PATTERN}))(?=\\s|$|#|\\*)`,
+    'gi'
+  )
+  while ((match = dayOfThisMonth.exec(text)) !== null) {
+    const start = match.index + match[1].length
+    const actualEnd = match.index + match[0].length
+    if (tokens.some((t) => start >= t.start && start < t.end)) continue
+    const day = parseInt(match[2], 10)
+    const iso = toIsoDate(year, ref.getMonth() + 1, day)
     tokens.push({
       start,
       end: actualEnd,

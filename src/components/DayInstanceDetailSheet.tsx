@@ -31,7 +31,7 @@ type Props = {
   onAddItem: (title: string, parentId?: string) => void
   onUpdateItemTitle: (itemId: string, title: string) => void
   onUpdateItemDuration?: (itemId: string, durationMin: number) => void
-  onAddItemAfter: (afterItemId: string) => Promise<string | void>
+  onAddItemAfter: (afterItemId: string, title?: string) => Promise<string | void>
   onReparentItem: (itemId: string, parentId?: string) => Promise<void>
   onApplyItemStructure: (structure: ItemTreeStructureRow[]) => Promise<void>
   onDeleteItem: (itemId: string) => void
@@ -63,7 +63,12 @@ export function DayInstanceDetailSheet({
   editScheduleOnOpen,
 }: Props) {
   const showStartNow = canStartTimerNow(instance)
-  const [openSections, setOpenSections] = useState<Set<DetailSection>>(() => new Set(['items']))
+  const [openSections, setOpenSections] = useState<Set<DetailSection>>(() => {
+    if (typeof window !== 'undefined' && window.matchMedia('(min-width: 768px)').matches) {
+      return new Set(['items', 'notes'])
+    }
+    return new Set(['items'])
+  })
 
   const toggleSection = (section: DetailSection) => {
     setOpenSections((prev) => {
@@ -73,6 +78,11 @@ export function DayInstanceDetailSheet({
       return next
     })
   }
+
+  useEffect(() => {
+    document.body.classList.add('detail-sheet-open')
+    return () => document.body.classList.remove('detail-sheet-open')
+  }, [])
 
   useEffect(() => {
     const onKey = (e: globalThis.KeyboardEvent) => e.key === 'Escape' && onClose()
@@ -134,37 +144,39 @@ export function DayInstanceDetailSheet({
         </header>
 
         <div className="detail-body">
-          <CollapsibleSection
-            title="Items"
-            count={items.length}
-            open={openSections.has('items')}
-            onToggle={() => toggleSection('items')}
-          >
-            {items.length > 0 ? (
-              <EditableItemList
-                compact
-                items={items}
-                onToggle={onToggleItem}
-                onApplyStructure={onApplyItemStructure}
-                onUpdateTitle={onUpdateItemTitle}
-                onUpdateDuration={instance.sourceTaskListId ? onUpdateItemDuration : undefined}
-                onDelete={onDeleteItem}
-                onAddAfter={onAddItemAfter}
-                onReparent={onReparentItem}
-              />
-            ) : (
-              <p className="detail-empty-items">No items yet</p>
-            )}
-            <AddItemInline items={items} onAdd={(t, parentId) => onAddItem(t, parentId)} />
-          </CollapsibleSection>
+          <div className="detail-columns">
+            <CollapsibleSection
+              title="Items"
+              count={items.length}
+              open={openSections.has('items')}
+              onToggle={() => toggleSection('items')}
+            >
+              {items.length > 0 ? (
+                <EditableItemList
+                  compact
+                  items={items}
+                  onToggle={onToggleItem}
+                  onApplyStructure={onApplyItemStructure}
+                  onUpdateTitle={onUpdateItemTitle}
+                  onUpdateDuration={instance.sourceTaskListId ? onUpdateItemDuration : undefined}
+                  onDelete={onDeleteItem}
+                  onAddAfter={onAddItemAfter}
+                  onReparent={onReparentItem}
+                />
+              ) : (
+                <p className="detail-empty-items">No items yet</p>
+              )}
+              <AddItemInline items={items} onAdd={(t, parentId) => onAddItem(t, parentId)} />
+            </CollapsibleSection>
 
-          <CollapsibleSection
-            title="Notes"
-            open={openSections.has('notes')}
-            onToggle={() => toggleSection('notes')}
-          >
-            <RichNote key={instance.id} content={instance.noteJson} onChange={onNoteChange} />
-          </CollapsibleSection>
+            <CollapsibleSection
+              title="Notes"
+              open={openSections.has('notes')}
+              onToggle={() => toggleSection('notes')}
+            >
+              <RichNote key={instance.id} content={instance.noteJson} onChange={onNoteChange} />
+            </CollapsibleSection>
+          </div>
         </div>
 
         <footer className="detail-footer">

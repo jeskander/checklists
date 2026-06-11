@@ -41,7 +41,7 @@ type Props = {
   onUpdateTitle: (id: string, title: string) => void
   onUpdateDuration?: (id: string, durationMin: number) => void
   onDelete?: (id: string) => void
-  onAddAfter: (afterItemId: string) => Promise<string | void>
+  onAddAfter: (afterItemId: string, title?: string) => Promise<string | void>
   onReparent: (itemId: string, parentId?: string) => Promise<void>
   onToggle?: (id: string, completed: boolean) => void
   compact?: boolean
@@ -127,7 +127,7 @@ function SortableBlockRow({
   onToggle?: (id: string, completed: boolean) => void
   itemKeyboard: {
     items: EditableListItem[]
-    onAddAfter: (afterItemId: string) => Promise<string | void>
+    onAddAfter: (afterItemId: string, title?: string) => Promise<string | void>
     onReparent: (itemId: string, parentId?: string) => Promise<void>
   }
 }) {

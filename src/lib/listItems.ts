@@ -35,16 +35,20 @@ export function listItemInputId(itemId: string): string {
 }
 
 /** Refocus after DOM moves (e.g. indent/unindent). Retries until the input remounts. */
-export function focusListItemInput(itemId: string, attemptsLeft = 16): void {
+export function focusListItemInput(
+  itemId: string,
+  attemptsLeft = 16,
+  cursor: 'start' | 'end' = 'end'
+): void {
   const el = document.getElementById(listItemInputId(itemId)) as HTMLInputElement | null
   if (el) {
     el.focus()
-    const end = el.value.length
-    el.setSelectionRange(end, end)
+    const pos = cursor === 'start' ? 0 : el.value.length
+    el.setSelectionRange(pos, pos)
     return
   }
   if (attemptsLeft > 0) {
-    requestAnimationFrame(() => focusListItemInput(itemId, attemptsLeft - 1))
+    requestAnimationFrame(() => focusListItemInput(itemId, attemptsLeft - 1, cursor))
   }
 }
 

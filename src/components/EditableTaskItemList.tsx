@@ -34,7 +34,7 @@ type Props = {
   onUpdateDeadline: (id: string, deadline: string | undefined) => void
   onDeleteTask: (rootId: string) => void
   onDeleteSubitem: (itemId: string) => void
-  onAddAfter: (afterItemId: string) => Promise<string | void>
+  onAddAfter: (afterItemId: string, title?: string) => Promise<string | void>
   onReparent: (itemId: string, parentId?: string) => Promise<void>
 }
 
@@ -155,7 +155,7 @@ function SortableTaskGroupCard({
   onDeleteSubitem: (itemId: string) => void
   itemKeyboard: {
     items: ListItemRow[]
-    onAddAfter: (afterItemId: string) => Promise<string | void>
+    onAddAfter: (afterItemId: string, title?: string) => Promise<string | void>
     onReparent: (itemId: string, parentId?: string) => Promise<void>
   }
 }) {

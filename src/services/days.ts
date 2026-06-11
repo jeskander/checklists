@@ -637,7 +637,9 @@ export async function applyInstanceItemTree(
 ): Promise<void> {
   const allItems = await listInstanceItems(instanceId)
   const ts = now()
-  await db.transaction('rw', [db.dayInstanceItems, db.syncQueue], async () => {
+  const changed: ItemTreeStructureRow[] = []
+
+  await db.transaction('rw', db.dayInstanceItems, async () => {
     for (const row of structure) {
       if (row.parentItemId && !canReparentUnder(allItems, row.id, row.parentItemId)) continue
       await db.dayInstanceItems.update(row.id, {
@@ -645,9 +647,11 @@ export async function applyInstanceItemTree(
         sortOrder: row.sortOrder,
         updatedAt: ts,
       })
-      await enqueueSync('update', 'dayInstanceItem', row.id)
+      changed.push(row)
     }
   })
+
+  for (const row of changed) await enqueueSync('update', 'dayInstanceItem', row.id)
 }
 
 // ─── Timeline normalization ───────────────────────────────────────────────────

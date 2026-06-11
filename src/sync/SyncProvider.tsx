@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabaseClient'
 import { handleRemoteDelete } from './remoteDelete'
 import {
   bootstrapSync,
+  flushPendingPush,
   queuePull,
   resetBootstrapState,
   runSync,
@@ -59,15 +60,18 @@ export function SyncProvider() {
   useEffect(() => {
     if (!session) return
 
-    const onVisible = () => {
-      if (document.visibilityState !== 'visible') return
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') {
+        void flushPendingPush()
+        return
+      }
       if (Date.now() - lastSyncAt.current < VISIBILITY_SYNC_MIN_MS) return
       lastSyncAt.current = Date.now()
       void runSync({ fullPull: true, pullOnly: true })
     }
 
-    document.addEventListener('visibilitychange', onVisible)
-    return () => document.removeEventListener('visibilitychange', onVisible)
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => document.removeEventListener('visibilitychange', onVisibility)
   }, [session])
 
   useEffect(() => {

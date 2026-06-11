@@ -20,14 +20,19 @@ let pendingSync = false
 let pushing = false
 let pendingPush = false
 let pullTimer: ReturnType<typeof setTimeout> | null = null
+let flushTimer: ReturnType<typeof setTimeout> | null = null
 
 const API_GAP_MS = 80
 const PULL_DEBOUNCE_MS = 400
+const PUSH_DEBOUNCE_MS = 500
 
-type SyncStatus = { busy: boolean; message: string; online: boolean }
+export type SyncActivity = 'idle' | 'sync' | 'reset' | 'bootstrap' | 'background' | 'upload'
+
+type SyncStatus = { busy: boolean; activity: SyncActivity; message: string; online: boolean }
 const syncListeners = new Set<(s: SyncStatus) => void>()
 let syncStatus: SyncStatus = {
   busy: false,
+  activity: 'idle',
   message: '',
   online: typeof navigator !== 'undefined' ? navigator.onLine : true,
 }
@@ -35,9 +40,19 @@ let syncStatus: SyncStatus = {
 let bootstrapReady = false
 const bootstrapListeners = new Set<(ready: boolean, message: string) => void>()
 
-function emitSyncStatus(message: string, busy = syncing || pushing): void {
-  syncStatus = { ...syncStatus, busy, message }
+function emitSyncStatus(
+  message: string,
+  busy: boolean,
+  activity: SyncActivity = syncStatus.activity
+): void {
+  const nextActivity = busy ? activity : 'idle'
+  syncStatus = { ...syncStatus, busy, activity: nextActivity, message }
   syncListeners.forEach((l) => l(syncStatus))
+}
+
+function emitPushStatus(message: string, busy: boolean): void {
+  if (syncStatus.activity === 'reset' || syncStatus.activity === 'bootstrap') return
+  emitSyncStatus(message, busy, 'upload')
 }
 
 function emitBootstrap(ready: boolean, message = ''): void {
@@ -194,7 +209,7 @@ async function pushQueueOps(
   let i = 0
   for (const op of ops) {
     i += 1
-    emitSyncStatus(`${label} (${i}/${ops.length})…`, true)
+    emitPushStatus(`${label} (${i}/${ops.length})…`, true)
     try {
       if (op.type === 'delete') {
         await deleteEntity(op.entity, op.entityId)
@@ -213,6 +228,10 @@ async function pushQueueOps(
 
 /** Push all pending local changes to Supabase immediately. */
 export async function flushPush(): Promise<{ ok: boolean; message: string }> {
+  if (syncStatus.activity === 'reset' || syncStatus.activity === 'bootstrap') {
+    return { ok: true, message: '' }
+  }
+
   if (pushing) {
     pendingPush = true
     return { ok: true, message: 'Queued — upload in progress…' }
@@ -229,13 +248,13 @@ export async function flushPush(): Promise<{ ok: boolean; message: string }> {
 
       const deleteResult = await pushQueueOps(deleteOps, 'Uploading deletions')
       if (!deleteResult.ok) {
-        emitSyncStatus(deleteResult.message, false)
+        emitPushStatus(deleteResult.message, false)
         return deleteResult
       }
 
       const pushResult = await pushQueueOps(upsertOps, 'Uploading changes')
       if (!pushResult.ok) {
-        emitSyncStatus(pushResult.message, false)
+        emitPushStatus(pushResult.message, false)
         return pushResult
       }
     }
@@ -247,7 +266,7 @@ export async function flushPush(): Promise<{ ok: boolean; message: string }> {
         lastPullAt: (await db.syncMeta.get('main'))?.lastPullAt ?? now(),
         lastPushAt: now(),
       })
-      if (!syncing) emitSyncStatus('', false)
+      if (!syncing) emitPushStatus('', false)
     }
     return { ok: true, message: 'Uploaded' }
   } finally {
@@ -259,7 +278,24 @@ export async function flushPush(): Promise<{ ok: boolean; message: string }> {
   }
 }
 
-/** Queue a change and upload to Supabase immediately. */
+function scheduleFlush(): void {
+  if (flushTimer) clearTimeout(flushTimer)
+  flushTimer = setTimeout(() => {
+    flushTimer = null
+    void flushPush()
+  }, PUSH_DEBOUNCE_MS)
+}
+
+/** Flush any debounced uploads now (e.g. manual sync or tab hide). */
+export function flushPendingPush(): Promise<{ ok: boolean; message: string }> {
+  if (flushTimer) {
+    clearTimeout(flushTimer)
+    flushTimer = null
+  }
+  return flushPush()
+}
+
+/** Queue a change; upload runs in the background after a short debounce. */
 export async function enqueueSync(
   type: 'create' | 'update' | 'delete',
   entity: string,
@@ -280,8 +316,7 @@ export async function enqueueSync(
     createdAt: now(),
   })
 
-  const result = await flushPush()
-  if (!result.ok) throw new Error(result.message)
+  scheduleFlush()
 }
 
 /** Debounced pull from Supabase (for realtime / tab focus). */
@@ -301,20 +336,20 @@ async function pullFromCloud(opts?: { full?: boolean }): Promise<void> {
   }
 
   syncing = true
-  emitSyncStatus('Updating from cloud…', true)
+  emitSyncStatus('Updating from cloud…', true, 'background')
   try {
     await pullFromSupabase(opts?.full ?? false, undefined, { reconcile: opts?.full ?? false })
     const { dedupeInboxLists } = await import('../services/taskLists')
-    await dedupeInboxLists()
+    await dedupeInboxLists({ push: false })
     await db.syncMeta.put({
       id: 'main',
       lastPullAt: now(),
       lastPushAt: (await db.syncMeta.get('main'))?.lastPushAt,
     })
-    emitSyncStatus('', false)
+    emitSyncStatus('', false, 'background')
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'Update failed'
-    emitSyncStatus(msg, false)
+    emitSyncStatus(msg, false, 'background')
   } finally {
     syncing = false
     if (pendingSync) {
@@ -329,7 +364,7 @@ export async function runSync(opts?: {
   pullOnly?: boolean
 }): Promise<{ ok: boolean; message: string }> {
   if (!navigator.onLine) {
-    emitSyncStatus('Offline — connect to sync', false)
+    emitSyncStatus('Offline — connect to sync', false, 'sync')
     return { ok: false, message: 'Offline' }
   }
 
@@ -339,7 +374,7 @@ export async function runSync(opts?: {
   }
 
   syncing = true
-  emitSyncStatus('Syncing…', true)
+  emitSyncStatus('Downloading from cloud…', true, 'sync')
 
   try {
     await pullFromSupabase(opts?.fullPull ?? false, undefined, {
@@ -347,10 +382,10 @@ export async function runSync(opts?: {
     })
 
     const { dedupeInboxLists } = await import('../services/taskLists')
-    await dedupeInboxLists()
+    await dedupeInboxLists({ push: true })
 
     if (!opts?.pullOnly) {
-      const pushResult = await flushPush()
+      const pushResult = await flushPendingPush()
       if (!pushResult.ok) return pushResult
     }
 
@@ -360,11 +395,11 @@ export async function runSync(opts?: {
       lastPushAt: now(),
     })
 
-    emitSyncStatus('Synced', false)
+    emitSyncStatus('Synced', false, 'sync')
     return { ok: true, message: 'Synced' }
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'Sync failed'
-    emitSyncStatus(msg, false)
+    emitSyncStatus(msg, false, 'sync')
     return { ok: false, message: msg }
   } finally {
     syncing = false
@@ -380,21 +415,23 @@ export async function bootstrapSync(): Promise<void> {
   emitBootstrap(false, 'Loading from cloud…')
 
   if (!navigator.onLine) {
-    emitSyncStatus('Offline — connect to load your data', false)
+    emitSyncStatus('Offline — connect to load your data', false, 'bootstrap')
     emitBootstrap(false, 'Offline — connect to load your data')
     return
   }
 
   if (syncing) return
   syncing = true
-  emitSyncStatus('Loading from cloud…', true)
+  emitSyncStatus('Loading from cloud…', true, 'bootstrap')
 
   try {
     await clearLocalStore()
-    await pullFromSupabase(true, (p) => emitSyncStatus(p.stage, true), { reconcile: true })
+    await pullFromSupabase(true, (p) => emitSyncStatus(p.stage, true, 'bootstrap'), {
+      reconcile: true,
+    })
 
     const { dedupeInboxLists } = await import('../services/taskLists')
-    await dedupeInboxLists()
+    await dedupeInboxLists({ push: false })
 
     await db.syncMeta.put({
       id: 'main',
@@ -402,11 +439,11 @@ export async function bootstrapSync(): Promise<void> {
       lastPushAt: now(),
     })
 
-    emitSyncStatus('', false)
+    emitSyncStatus('', false, 'bootstrap')
     emitBootstrap(true, '')
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'Failed to load from cloud'
-    emitSyncStatus(msg, false)
+    emitSyncStatus(msg, false, 'bootstrap')
     emitBootstrap(false, msg)
   } finally {
     syncing = false
@@ -421,14 +458,16 @@ export async function resetLocalFromCloud(): Promise<{ ok: boolean; message: str
 
   emitBootstrap(false, 'Resetting from cloud…')
   syncing = true
-  emitSyncStatus('Resetting from cloud…', true)
+  emitSyncStatus('Downloading from cloud…', true, 'reset')
 
   try {
     await clearLocalStore()
-    await pullFromSupabase(true, (p) => emitSyncStatus(p.stage, true), { reconcile: true })
+    await pullFromSupabase(true, (p) => emitSyncStatus(p.stage, true, 'reset'), {
+      reconcile: true,
+    })
 
     const { dedupeInboxLists } = await import('../services/taskLists')
-    await dedupeInboxLists()
+    await dedupeInboxLists({ push: false })
 
     await db.syncMeta.put({
       id: 'main',
@@ -436,12 +475,12 @@ export async function resetLocalFromCloud(): Promise<{ ok: boolean; message: str
       lastPushAt: now(),
     })
 
-    emitSyncStatus('Reset complete', false)
+    emitSyncStatus('Reset complete', false, 'reset')
     emitBootstrap(true, '')
     return { ok: true, message: 'Reset complete' }
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'Reset failed'
-    emitSyncStatus(msg, false)
+    emitSyncStatus(msg, false, 'reset')
     emitBootstrap(false, msg)
     return { ok: false, message: msg }
   } finally {

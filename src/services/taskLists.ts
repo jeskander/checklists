@@ -227,10 +227,11 @@ export async function addTaskListItemAfter(
     )
     .toArray()
 
-  for (const s of toShift) {
-    await db.taskListItems.update(s.id, { sortOrder: s.sortOrder + 1, updatedAt: now() })
-    await enqueueSync('update', 'taskListItem', s.id)
-  }
+  await db.transaction('rw', db.taskListItems, async () => {
+    for (const s of toShift) {
+      await db.taskListItems.update(s.id, { sortOrder: s.sortOrder + 1, updatedAt: now() })
+    }
+  })
 
   const item: TaskListItem = {
     id: newId(),
@@ -245,6 +246,7 @@ export async function addTaskListItemAfter(
   }
   await db.taskListItems.add(item)
   await updateTaskList(taskListId, {})
+  for (const s of toShift) await enqueueSync('update', 'taskListItem', s.id)
   await enqueueSync('create', 'taskListItem', item.id)
   return item
 }
@@ -331,17 +333,22 @@ export async function applyTaskListItemTree(
   structure: ItemTreeStructureRow[]
 ): Promise<void> {
   const allItems = await listAllTaskListItems(taskListId)
+  const changed: ItemTreeStructureRow[] = []
 
-  for (const row of structure) {
-    if (row.parentItemId && !canReparentUnder(allItems, row.id, row.parentItemId)) continue
-    await db.taskListItems.update(row.id, {
-      parentItemId: row.parentItemId,
-      sortOrder: row.sortOrder,
-      updatedAt: now(),
-    })
-    await enqueueSync('update', 'taskListItem', row.id)
-  }
+  await db.transaction('rw', db.taskListItems, async () => {
+    for (const row of structure) {
+      if (row.parentItemId && !canReparentUnder(allItems, row.id, row.parentItemId)) continue
+      await db.taskListItems.update(row.id, {
+        parentItemId: row.parentItemId,
+        sortOrder: row.sortOrder,
+        updatedAt: now(),
+      })
+      changed.push(row)
+    }
+  })
+
   await updateTaskList(taskListId, {})
+  for (const row of changed) await enqueueSync('update', 'taskListItem', row.id)
 }
 
 export async function completeTaskListItem(id: string): Promise<void> {
@@ -406,7 +413,8 @@ export async function listOpenTasksOverdue(asOfDate: string): Promise<TaskDueOnD
   return enrichTaskListItems(items)
 }
 
-export async function dedupeInboxLists(): Promise<TaskList | undefined> {
+export async function dedupeInboxLists(opts?: { push?: boolean }): Promise<TaskList | undefined> {
+  const push = opts?.push ?? true
   const inboxes = (await db.taskLists.toArray())
     .filter((l) => l.title.trim().toLowerCase() === INBOX_LIST_TITLE.toLowerCase())
     .sort((a, b) => a.sortOrder - b.sortOrder)
@@ -427,15 +435,19 @@ export async function dedupeInboxLists(): Promise<TaskList | undefined> {
         sortOrder: nextSort + i,
         updatedAt: now(),
       })
-      await enqueueSync('update', 'taskListItem', items[i].id)
+      if (push) await enqueueSync('update', 'taskListItem', items[i].id)
     }
     nextSort += items.length
     await db.taskLists.delete(dup.id)
-    await enqueueSync('delete', 'taskList', dup.id)
+    if (push) await enqueueSync('delete', 'taskList', dup.id)
   }
 
   if (canonical.sortOrder !== 0) {
-    await updateTaskList(canonical.id, { sortOrder: 0 })
+    if (push) {
+      await updateTaskList(canonical.id, { sortOrder: 0 })
+    } else {
+      await db.taskLists.put({ ...canonical, sortOrder: 0, updatedAt: now() })
+    }
     return { ...canonical, sortOrder: 0 }
   }
 

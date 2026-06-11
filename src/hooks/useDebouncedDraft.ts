@@ -31,5 +31,10 @@ export function useDebouncedDraft(
       setDraft(next)
       debouncedOnChange(next)
     },
+    commitNow: (next: string) => {
+      debouncedOnChange.cancel()
+      setDraft(next)
+      onChange(next)
+    },
   }
 }

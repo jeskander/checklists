@@ -126,10 +126,11 @@ export async function addTemplateItemAfter(
     .filter((i) => (i.parentItemId ?? undefined) === (parentItemId ?? undefined) && i.sortOrder >= insertAt)
     .toArray()
 
-  for (const s of toShift) {
-    await db.templateItems.update(s.id, { sortOrder: s.sortOrder + 1, updatedAt: now() })
-    await enqueueSync('update', 'templateItem', s.id)
-  }
+  await db.transaction('rw', db.templateItems, async () => {
+    for (const s of toShift) {
+      await db.templateItems.update(s.id, { sortOrder: s.sortOrder + 1, updatedAt: now() })
+    }
+  })
 
   const item: TemplateItem = {
     id: newId(),
@@ -141,6 +142,7 @@ export async function addTemplateItemAfter(
   }
   await db.templateItems.add(item)
   await updateTemplate(templateId, {})
+  for (const s of toShift) await enqueueSync('update', 'templateItem', s.id)
   await enqueueSync('create', 'templateItem', item.id)
   return item
 }
@@ -239,17 +241,22 @@ export async function applyTemplateItemTree(
   structure: ItemTreeStructureRow[]
 ): Promise<void> {
   const allItems = await listTemplateItems(templateId)
+  const changed: ItemTreeStructureRow[] = []
 
-  for (const row of structure) {
-    if (row.parentItemId && !canReparentUnder(allItems, row.id, row.parentItemId)) continue
-    await db.templateItems.update(row.id, {
-      parentItemId: row.parentItemId,
-      sortOrder: row.sortOrder,
-      updatedAt: now(),
-    })
-    await enqueueSync('update', 'templateItem', row.id)
-  }
+  await db.transaction('rw', db.templateItems, async () => {
+    for (const row of structure) {
+      if (row.parentItemId && !canReparentUnder(allItems, row.id, row.parentItemId)) continue
+      await db.templateItems.update(row.id, {
+        parentItemId: row.parentItemId,
+        sortOrder: row.sortOrder,
+        updatedAt: now(),
+      })
+      changed.push(row)
+    }
+  })
+
   await updateTemplate(templateId, {})
+  for (const row of changed) await enqueueSync('update', 'templateItem', row.id)
 }
 
 export { addInstanceFromTemplate as copyTemplateToDay } from './days'

@@ -304,7 +304,8 @@ export function QuickAddTask() {
             <h2>Add task</h2>
             <p className="quick-add-hint">
               Duration: <strong>01:30</strong> or <strong>0130</strong> · Due:{' '}
-              <strong>15/06/2026</strong>, <strong>1st of July</strong>, <strong>this Monday</strong>{' '}
+              <strong>15/06/2026</strong>, <strong>15th</strong> (this month), <strong>in 3 weeks</strong>,{' '}
+              <strong>1st of July</strong>, <strong>this Monday</strong>{' '}
               · Priority: <strong>*1</strong> (highest) · List: <strong>#name</strong> (defaults to Inbox)
               {!hasAnthropicConfig() && (
                 <>

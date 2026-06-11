@@ -149,7 +149,7 @@ export function TaskListEditorPage() {
               await restoreTaskListItems([snap, ...childSnaps])
             })
           }}
-          onAddAfter={(afterId) => addTaskListItemAfter(id, afterId).then((i) => i.id)}
+          onAddAfter={(afterId, title) => addTaskListItemAfter(id, afterId, title ?? '').then((i) => i.id)}
           onReparent={(itemId, parentId) => reparentTaskListItem(itemId, parentId)}
         />
       )}

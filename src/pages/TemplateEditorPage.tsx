@@ -112,7 +112,7 @@ export function TemplateEditorPage() {
             await restoreTemplateItems([snap, ...childSnaps])
           })
         }}
-        onAddAfter={(afterId) => addTemplateItemAfter(id, afterId).then((i) => i.id)}
+        onAddAfter={(afterId, title) => addTemplateItemAfter(id, afterId, title ?? '').then((i) => i.id)}
         onReparent={(itemId, parentId) => reparentTemplateItem(itemId, parentId)}
       />
 

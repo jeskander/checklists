@@ -33,7 +33,16 @@ export function ListItemInput({
   const draft = useDebouncedDraft(external, onChange)
 
   const onKeyDown = (e: ReactKeyboardEvent<HTMLInputElement>) => {
-    handleListItemKeyDown(e, { items, itemId, onAddAfter, onReparent })
+    handleListItemKeyDown(e, {
+      items,
+      itemId,
+      value: draft.value,
+      onAddAfter,
+      onCommitTitle: (id, title) => {
+        if (id === itemId) draft.commitNow(title)
+      },
+      onReparent,
+    })
   }
 
   return (

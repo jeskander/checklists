@@ -16,7 +16,7 @@ type Props = {
   onToggle: (id: string, completed: boolean) => void
   readOnly?: boolean
   onEditTitle?: (id: string, title: string) => void
-  onAddAfter?: (afterItemId: string) => Promise<string | void>
+  onAddAfter?: (afterItemId: string, title?: string) => Promise<string | void>
   onReparent?: (itemId: string, parentItemId?: string) => Promise<void>
   compact?: boolean
 }
@@ -64,7 +64,7 @@ function ItemNode({
   onToggle: (id: string, completed: boolean) => void
   readOnly?: boolean
   onEditTitle?: (id: string, title: string) => void
-  onAddAfter?: (afterItemId: string) => Promise<string | void>
+  onAddAfter?: (afterItemId: string, title?: string) => Promise<string | void>
   onReparent?: (itemId: string, parentItemId?: string) => Promise<void>
 }) {
   const children = getChildren(items, item.id)

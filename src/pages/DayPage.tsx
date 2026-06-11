@@ -331,8 +331,8 @@ export function DayPage() {
     onUpdateItemTitle: (itemId: string, title: string) => void updateInstanceItem(itemId, { title }),
     onUpdateItemDuration: (itemId: string, durationMin: number) =>
       void updateInstanceItem(itemId, { durationMin }),
-    onAddItemAfter: (afterItemId: string) =>
-      addInstanceItemAfter(inst.id, afterItemId).then((item) => item.id),
+    onAddItemAfter: (afterItemId: string, title?: string) =>
+      addInstanceItemAfter(inst.id, afterItemId, title ?? '').then((item) => item.id),
     onReparentItem: (itemId: string, parentId?: string) => reparentInstanceItem(itemId, parentId),
     onApplyItemStructure: (structure: ItemTreeStructureRow[]) =>
       applyInstanceItemTree(inst.id, structure),
