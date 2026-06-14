@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useNavigate, useParams } from 'react-router-dom'
 import {
@@ -26,9 +26,14 @@ import {
   addInstanceItem,
   addInstanceItemAfter,
   applyInstanceItemTree,
+  completeAllInstanceItems,
   deleteInstance,
   deleteInstanceItem,
+  duplicateInstance,
+  duplicateInstanceItem,
   reparentInstanceItem,
+  saveInstanceAsTemplate,
+  detachInstanceFromSource,
   updateInstanceItem,
   formatDateLabel,
   getOrCreateDay,
@@ -50,9 +55,20 @@ import {
   toggleInstanceItem,
   updateInstance,
   listDayInstances,
+  listInstanceItems,
 } from '../services/days'
 import { getTaskList, listOpenTasksDueOn, listOpenTasksOverdue } from '../services/taskLists'
+import {
+  endRepeatSeriesFromDate,
+  getRepeatDeletePrompt,
+  removeSkipOnDate,
+  restoreRepeatSeries,
+  skipRepeatOnDate,
+  type RepeatDeletePrompt,
+} from '../services/repeatDelete'
+import { deleteTemplate } from '../services/templates'
 import { db } from '../db/database'
+import { calendarViewMonthForDate, DayCalendarPicker } from '../components/DayCalendarPicker'
 import { DayDeadlineBanner } from '../components/DayDeadlineBanner'
 import { todayDateString } from '../lib/ids'
 import { setLastCalendarDate } from '../lib/lastCalendarDate'
@@ -63,15 +79,17 @@ import { reorderIds } from '../lib/reorder'
 import { DayInstanceTile } from '../components/DayInstanceTile'
 import { DayTimeGap } from '../components/DayTimeGap'
 import { DaySplitRow } from '../components/DaySplitRow'
-import { SortableDayTileInner } from '../components/SortableDayTileInner'
+import { SortableDayTileInner, type BlockMenuHandlers } from '../components/SortableDayTileInner'
 import { blockHeightPx } from '../lib/daySplitLayout'
 import { SortableDayFreeTime } from '../components/SortableDayFreeTime'
 import { DayInstanceDetailSheet } from '../components/DayInstanceDetailSheet'
+import { DeleteRepeatInstanceDialog } from '../components/DeleteRepeatInstanceDialog'
 import {
   buildTimeline,
   chainTimelineFromDayStart,
   groupTimelineForDisplay,
   flattenTimelineSortableIds,
+  findAdjacentStandaloneInstance,
   isFreeTimelineDragId,
   parseSideDropId,
   parseStackBelowDropId,
@@ -99,6 +117,11 @@ export function DayPage() {
   const { date } = useParams<{ date: string }>()
   const navigate = useNavigate()
   const { showUndo } = useUndo()
+  const [calendarOpen, setCalendarOpen] = useState(false)
+  const [calendarView, setCalendarView] = useState(() =>
+    date ? calendarViewMonthForDate(date) : { year: new Date().getFullYear(), month: new Date().getMonth() }
+  )
+  const calendarAnchorRef = useRef<HTMLDivElement>(null)
   const [pickerOpen, setPickerOpen] = useState(false)
   const [pickerInsert, setPickerInsert] = useState<FreeSlotInsert | null>(null)
   const [pickerQuery, setPickerQuery] = useState('')
@@ -108,6 +131,11 @@ export function DayPage() {
   const [draggingId, setDraggingId] = useState<string | null>(null)
   const [dropHint, setDropHint] = useState<{ targetId: string; side: 'left' | 'right' } | null>(null)
   const [stackHintId, setStackHintId] = useState<string | null>(null)
+  const [repeatDeletePrompt, setRepeatDeletePrompt] = useState<{
+    inst: DayInstance
+    instItems: DayInstanceItem[]
+    prompt: RepeatDeletePrompt
+  } | null>(null)
 
   const day = useLiveQuery(
     () => (date ? db.days.where('date').equals(date).first() : undefined),
@@ -176,6 +204,11 @@ export function DayPage() {
   }, [date])
 
   useEffect(() => {
+    if (!date) return
+    setCalendarView(calendarViewMonthForDate(date))
+  }, [date])
+
+  useEffect(() => {
     if (!pickerOpen) return
     setPickerQuery('')
   }, [pickerOpen])
@@ -190,6 +223,7 @@ export function DayPage() {
     : (taskLists ?? [])
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }))
+  const blockDidDragRef = useRef(false)
 
   const detailInstance = detailId ? instances?.find((i) => i.id === detailId) : undefined
 
@@ -206,7 +240,12 @@ export function DayPage() {
 
   const handleDragStart = (event: DragStartEvent) => {
     const id = String(event.active.id)
-    if (instances?.some((i) => i.id === id) || isFreeTimelineDragId(id)) setDraggingId(id)
+    if (instances?.some((i) => i.id === id)) {
+      blockDidDragRef.current = true
+      setDraggingId(id)
+    } else if (isFreeTimelineDragId(id)) {
+      setDraggingId(id)
+    }
   }
 
   const handleDragOver = (event: DragOverEvent) => {
@@ -309,56 +348,189 @@ export function DayPage() {
     })
   }
 
-  const instanceHandlers = (inst: DayInstance) => ({
-    onOpen: () => setDetailId(inst.id),
-    onStartNow: () => void startInstanceNow(inst.id),
-    onReset: async () => {
-      const prevItems = [...(allItems?.[inst.id] ?? [])]
-      const prevAddedAt = inst.addedAt
-      const prevTimer = inst.timerStartedAt
-      await resetInstance(inst.id)
-      showUndo('Block reset', async () => {
-        await restoreInstanceReset(inst.id, prevItems, prevAddedAt, prevTimer)
-      })
-    },
-    onNoteChange: (json: string) => void updateInstance(inst.id, { noteJson: json }),
-    onTitleChange: (title: string) => void updateInstance(inst.id, { title }),
-    onDurationChange: (durationMin: number) => void updateInstance(inst.id, { durationMin }),
-    onScheduledStartChange: (scheduledStartMs: number) =>
-      void applyInstanceScheduledStartChange(inst.id, scheduledStartMs),
-    onToggleItem: (id: string, completed: boolean) => void toggleInstanceItem(id, completed),
-    onAddItem: (title: string, parentId?: string) => void addInstanceItem(inst.id, title, parentId),
-    onUpdateItemTitle: (itemId: string, title: string) => void updateInstanceItem(itemId, { title }),
-    onUpdateItemDuration: (itemId: string, durationMin: number) =>
-      void updateInstanceItem(itemId, { durationMin }),
-    onAddItemAfter: (afterItemId: string, title?: string) =>
-      addInstanceItemAfter(inst.id, afterItemId, title ?? '').then((item) => item.id),
-    onReparentItem: (itemId: string, parentId?: string) => reparentInstanceItem(itemId, parentId),
-    onApplyItemStructure: (structure: ItemTreeStructureRow[]) =>
-      applyInstanceItemTree(inst.id, structure),
-    onDeleteItem: async (itemId: string) => {
-      const instItems = allItems?.[inst.id] ?? []
-      const snap = instItems.find((i) => i.id === itemId)
-      if (!snap) return
-      const descendantSnaps = instItems.filter((i) =>
-        collectDescendantIds(instItems, itemId).includes(i.id)
-      )
-      await deleteInstanceItem(itemId)
-      showUndo('Item deleted', async () => {
-        await restoreDayInstanceItems([snap, ...descendantSnaps])
-      })
-    },
-    onDelete: async () => {
+  async function performDeleteInstance(inst: DayInstance, instItems: DayInstanceItem[]) {
+    const snapInst = { ...inst }
+    const snapItems = [...instItems]
+    if (detailId === inst.id) setDetailId(null)
+    await deleteInstance(inst.id)
+    showUndo('Block removed', async () => {
+      await restoreDayInstance(snapInst)
+      await restoreDayInstanceItems(snapItems)
+    })
+  }
+
+  async function requestDeleteInstance(inst: DayInstance, instItems: DayInstanceItem[]) {
+    if (!date) {
+      await performDeleteInstance(inst, instItems)
+      return
+    }
+    const prompt = await getRepeatDeletePrompt(inst, date, formatDateLabel)
+    if (prompt) {
+      setRepeatDeletePrompt({ inst, instItems, prompt })
+      return
+    }
+    await performDeleteInstance(inst, instItems)
+  }
+
+  async function handleRepeatDeleteChoice(mode: 'one' | 'future' | 'cancel') {
+    if (!repeatDeletePrompt || !date || mode === 'cancel') {
+      setRepeatDeletePrompt(null)
+      return
+    }
+
+    const { inst, instItems, prompt } = repeatDeletePrompt
+    const { source } = prompt
+
+    if (mode === 'one') {
       const snapInst = { ...inst }
-      const snapItems = [...(allItems?.[inst.id] ?? [])]
+      const snapItems = [...instItems]
+      await skipRepeatOnDate(source, date)
       if (detailId === inst.id) setDetailId(null)
       await deleteInstance(inst.id)
-      showUndo('Block removed', async () => {
+      setRepeatDeletePrompt(null)
+      showUndo('Event skipped', async () => {
         await restoreDayInstance(snapInst)
         await restoreDayInstanceItems(snapItems)
+        await removeSkipOnDate(source, date)
       })
-    },
-  })
+      return
+    }
+
+    const snapshot = await endRepeatSeriesFromDate(source, date)
+    if (detailId === inst.id) setDetailId(null)
+    setRepeatDeletePrompt(null)
+    if (snapshot) {
+      showUndo('Repeat ended', async () => {
+        await restoreRepeatSeries(snapshot, source, restoreDayInstance, restoreDayInstanceItems)
+      })
+    }
+  }
+
+  const instanceHandlers = (inst: DayInstance) => {
+    const instItems = allItems?.[inst.id] ?? []
+    const neighborAbove = instances
+      ? findAdjacentStandaloneInstance(inst.id, instances, freeTimes ?? [], 'above')
+      : undefined
+    const neighborBelow = instances
+      ? findAdjacentStandaloneInstance(inst.id, instances, freeTimes ?? [], 'below')
+      : undefined
+
+    const blockMenu: BlockMenuHandlers = {
+      canSplitWithAbove: Boolean(neighborAbove),
+      canSplitWithBelow: Boolean(neighborBelow),
+      hasTemplateSource: Boolean(inst.sourceTemplateId),
+      hasTaskListSource: Boolean(inst.sourceTaskListId),
+      hasLinkedSource: Boolean(inst.sourceTemplateId || inst.sourceTaskListId),
+      onStartNow: () => void startInstanceNow(inst.id),
+      onReset: async () => {
+        const prevItems = [...instItems]
+        const prevAddedAt = inst.addedAt
+        const prevTimer = inst.timerStartedAt
+        await resetInstance(inst.id)
+        showUndo('Block reset', async () => {
+          await restoreInstanceReset(inst.id, prevItems, prevAddedAt, prevTimer)
+        })
+      },
+      onMarkComplete: async () => {
+        const snap = instItems.map((i) => ({ ...i }))
+        await completeAllInstanceItems(inst.id)
+        showUndo('Block marked complete', async () => {
+          await restoreDayInstanceItems(snap)
+        })
+      },
+      onDuplicate: async () => {
+        const newId = await duplicateInstance(inst.id)
+        showUndo('Block duplicated', async () => {
+          await deleteInstance(newId)
+        })
+      },
+      onSaveToLibrary: async () => {
+        const templateId = await saveInstanceAsTemplate(inst.id)
+        showUndo('Saved to library', async () => {
+          await deleteTemplate(templateId)
+        })
+      },
+      onDetachFromSource: async () => {
+        const snapInst = { ...inst }
+        await detachInstanceFromSource(inst.id)
+        showUndo('Detached from source', async () => {
+          await restoreDayInstance(snapInst)
+        })
+      },
+      onChangeRepeatRule: () => {
+        if (inst.sourceTemplateId) navigate(`/library/${inst.sourceTemplateId}`)
+        else if (inst.sourceTaskListId) navigate(`/tasks/${inst.sourceTaskListId}`)
+      },
+      onSplitWithAbove: async () => {
+        if (!neighborAbove || !instances || !freeTimes) return
+        const before = snapshotDayTimeline(instances, freeTimes)
+        await linkInstancesAsAlternatives(inst.id, neighborAbove.id, 'right')
+        showUndo('Added to split plan', async () => {
+          await restoreDayTimeline(before)
+        })
+      },
+      onSplitWithBelow: async () => {
+        if (!neighborBelow || !instances || !freeTimes) return
+        const before = snapshotDayTimeline(instances, freeTimes)
+        await linkInstancesAsAlternatives(inst.id, neighborBelow.id, 'left')
+        showUndo('Added to split plan', async () => {
+          await restoreDayTimeline(before)
+        })
+      },
+      onUnlinkFromSplit: async () => {
+        if (!inst.altGroupId || !instances || !freeTimes) return
+        const before = snapshotDayTimeline(instances, freeTimes)
+        await unlinkInstanceFromAltGroup(inst.id)
+        showUndo('Removed from split plan', async () => {
+          await restoreDayTimeline(before)
+        })
+      },
+      onDelete: () => void requestDeleteInstance(inst, instItems),
+    }
+
+    return {
+      onOpen: () => setDetailId(inst.id),
+      blockMenu,
+      onStartNow: blockMenu.onStartNow,
+      onReset: blockMenu.onReset,
+      onNoteChange: (json: string) => void updateInstance(inst.id, { noteJson: json }),
+      onTitleChange: (title: string) => void updateInstance(inst.id, { title }),
+      onDurationChange: (durationMin: number) => void updateInstance(inst.id, { durationMin }),
+      onScheduledStartChange: (scheduledStartMs: number) =>
+        void applyInstanceScheduledStartChange(inst.id, scheduledStartMs),
+      onToggleItem: (id: string, completed: boolean) => void toggleInstanceItem(id, completed),
+      onAddItem: (title: string, parentId?: string) => void addInstanceItem(inst.id, title, parentId),
+      onUpdateItemTitle: (itemId: string, title: string) => void updateInstanceItem(itemId, { title }),
+      onUpdateItemDuration: (itemId: string, durationMin: number) =>
+        void updateInstanceItem(itemId, { durationMin }),
+      onAddItemAfter: (afterItemId: string, title?: string) =>
+        addInstanceItemAfter(inst.id, afterItemId, title ?? '').then((item) => item.id),
+      onReparentItem: (itemId: string, parentId?: string) => reparentInstanceItem(itemId, parentId),
+      onApplyItemStructure: (structure: ItemTreeStructureRow[]) =>
+        applyInstanceItemTree(inst.id, structure),
+      onDeleteItem: async (itemId: string) => {
+        const snap = instItems.find((i) => i.id === itemId)
+        if (!snap) return
+        const descendantSnaps = instItems.filter((i) =>
+          collectDescendantIds(instItems, itemId).includes(i.id)
+        )
+        await deleteInstanceItem(itemId)
+        showUndo('Item deleted', async () => {
+          await restoreDayInstanceItems([snap, ...descendantSnaps])
+        })
+      },
+      onDuplicateItem: async (itemId: string) => {
+        const newRootId = await duplicateInstanceItem(itemId)
+        showUndo('Item duplicated', async () => {
+          const currentItems = await listInstanceItems(inst.id)
+          const toDelete = [newRootId, ...collectDescendantIds(currentItems, newRootId)]
+          for (const id of [...toDelete].reverse()) {
+            await deleteInstanceItem(id)
+          }
+        })
+      },
+    }
+  }
 
   return (
     <>
@@ -366,29 +538,54 @@ export function DayPage() {
         <button type="button" className="btn btn-ghost btn-icon" onClick={() => shiftDate(-1)} aria-label="Previous day">
           ‹
         </button>
-        <div className="day-header-center">
-          <h1>{formatDateLabel(date)}</h1>
-          <div className="day-header-meta">
-            <p>{date}</p>
-            {!isViewingToday && (
-              <button
-                type="button"
-                className="btn btn-ghost btn-icon day-today-btn"
-                onClick={() => navigate(`/calendar/${todayDateString()}`)}
-                aria-label="Go to today"
-                title="Today"
-              >
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden="true">
-                  <path
-                    d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                  <circle cx="12" cy="15" r="1.5" fill="currentColor" stroke="none" />
-                </svg>
-              </button>
-            )}
-          </div>
+        <div className="day-header-center-wrap" ref={calendarAnchorRef}>
+          <button
+            type="button"
+            className="day-header-center day-header-date-btn"
+            onClick={() => setCalendarOpen((open) => !open)}
+            aria-expanded={calendarOpen}
+            aria-haspopup="dialog"
+            aria-label={`${formatDateLabel(date)}, choose a day`}
+          >
+            <h1>{formatDateLabel(date)}</h1>
+            <div className="day-header-meta">
+              <p>{date}</p>
+              {!isViewingToday && (
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-icon day-today-btn"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    navigate(`/calendar/${todayDateString()}`)
+                  }}
+                  aria-label="Go to today"
+                  title="Today"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden="true">
+                    <path
+                      d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                    <circle cx="12" cy="15" r="1.5" fill="currentColor" stroke="none" />
+                  </svg>
+                </button>
+              )}
+            </div>
+          </button>
+          <DayCalendarPicker
+            selectedDate={date}
+            open={calendarOpen}
+            onClose={() => setCalendarOpen(false)}
+            onSelectDate={(d) => {
+              navigate(`/calendar/${d}`)
+              setCalendarOpen(false)
+            }}
+            viewYear={calendarView.year}
+            viewMonth={calendarView.month}
+            onViewMonthChange={(year, month) => setCalendarView({ year, month })}
+            containerRef={calendarAnchorRef}
+          />
         </div>
         <button type="button" className="btn btn-ghost btn-icon" onClick={() => shiftDate(1)} aria-label="Next day">
           ›
@@ -425,6 +622,7 @@ export function DayPage() {
           freeTimes={freeTimes ?? []}
           allItems={allItems ?? {}}
           instanceHandlers={instanceHandlers}
+          blockDidDragRef={blockDidDragRef}
           draggingId={draggingId}
           dropHint={dropHint}
           stackHintId={stackHintId}
@@ -522,6 +720,17 @@ export function DayPage() {
           {...instanceHandlers(detailInstance)}
         />
       )}
+
+      {repeatDeletePrompt ? (
+        <DeleteRepeatInstanceDialog
+          blockTitle={repeatDeletePrompt.prompt.blockTitle}
+          subtitle={repeatDeletePrompt.prompt.subtitle}
+          futureCount={repeatDeletePrompt.prompt.futureCount}
+          showFutureOption={repeatDeletePrompt.prompt.showFutureOption}
+          onChoose={(mode) => void handleRepeatDeleteChoice(mode)}
+          onDismiss={() => setRepeatDeletePrompt(null)}
+        />
+      ) : null}
 
       {pickerOpen && (
         <div
@@ -643,6 +852,7 @@ function DayTimelineList({
   freeTimes,
   allItems,
   instanceHandlers,
+  blockDidDragRef,
   draggingId,
   dropHint,
   stackHintId,
@@ -654,8 +864,9 @@ function DayTimelineList({
   allItems: Record<string, DayInstanceItem[]>
   instanceHandlers: (inst: DayInstance) => {
     onOpen: () => void
-    onDelete: () => void
+    blockMenu: BlockMenuHandlers
   }
+  blockDidDragRef: React.MutableRefObject<boolean>
   draggingId: string | null
   dropHint: { targetId: string; side: 'left' | 'right' } | null
   stackHintId: string | null
@@ -699,6 +910,7 @@ function DayTimelineList({
               freeGaps={freeGaps}
               dropHint={dropHint}
               stackHintId={stackHintId}
+              blockDidDragRef={blockDidDragRef}
               instanceHandlers={instanceHandlers}
             />
           ) : (
@@ -708,6 +920,7 @@ function DayTimelineList({
               items={allItems[entry.instance.id] ?? []}
               dropHint={dropHint}
               stackHintId={stackHintId}
+              didDragRef={blockDidDragRef}
               {...instanceHandlers(entry.instance)}
             />
           )

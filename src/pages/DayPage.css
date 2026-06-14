@@ -1,8 +1,32 @@
 .day-header {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   text-align: center;
+}
+
+.day-header-center-wrap {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+
+.day-header-date-btn {
+  display: block;
+  width: 100%;
+  padding: 0.15rem 0.25rem;
+  border-radius: var(--radius-sm);
+  text-align: center;
+  transition: background 0.15s ease;
+}
+
+.day-header-date-btn:hover {
+  background: var(--bg-subtle);
+}
+
+.day-header-date-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 .day-header-center h1 {

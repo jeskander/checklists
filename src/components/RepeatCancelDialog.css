@@ -1,0 +1,26 @@
+.repeat-cancel-overlay {
+  z-index: 90;
+}
+
+.repeat-cancel-sheet h2 {
+  font-size: 1.35rem;
+  margin-bottom: 0.75rem;
+}
+
+.repeat-cancel-copy {
+  color: var(--ink-muted);
+  line-height: 1.5;
+  margin: 0;
+}
+
+.repeat-cancel-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 1.25rem;
+}
+
+.repeat-cancel-actions .btn {
+  width: 100%;
+  justify-content: center;
+}

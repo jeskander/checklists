@@ -87,6 +87,7 @@ export function dayInstanceToRow(i: DayInstance): Record<string, unknown> {
     alt_group_id: i.altGroupId ?? null,
     alt_group_index: i.altGroupIndex ?? null,
     alt_stack_index: i.altStackIndex ?? null,
+    created_by_repeat: i.createdByRepeat ?? false,
     updated_at: toIso(i.updatedAt),
   }
 }

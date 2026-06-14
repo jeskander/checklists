@@ -295,14 +295,12 @@ export function flushPendingPush(): Promise<{ ok: boolean; message: string }> {
   return flushPush()
 }
 
-/** Queue a change; upload runs in the background after a short debounce. */
+/** Queue a change; upload runs in the background when online. */
 export async function enqueueSync(
   type: 'create' | 'update' | 'delete',
   entity: string,
   entityId: string
 ): Promise<void> {
-  requireOnline()
-
   const existing = await db.syncQueue
     .filter((op) => op.entity === entity && op.entityId === entityId)
     .toArray()
@@ -316,7 +314,7 @@ export async function enqueueSync(
     createdAt: now(),
   })
 
-  scheduleFlush()
+  if (navigator.onLine) scheduleFlush()
 }
 
 /** Debounced pull from Supabase (for realtime / tab focus). */
@@ -410,11 +408,21 @@ export async function runSync(opts?: {
   }
 }
 
-/** Online-first startup: wipe local cache and load everything from Supabase. */
+/** Startup sync: keep local cache on refresh; full cloud load only on cold start. */
 export async function bootstrapSync(): Promise<void> {
   emitBootstrap(false, 'Loading from cloud…')
 
+  const meta = await db.syncMeta.get('main')
+  const warmStart = meta?.lastPullAt != null
+
   if (!navigator.onLine) {
+    if (warmStart) {
+      const { processCalendarRepeats } = await import('../services/templateRepeat')
+      await processCalendarRepeats()
+      emitSyncStatus('Offline — showing saved data', false, 'bootstrap')
+      emitBootstrap(true, 'Offline — showing saved data')
+      return
+    }
     emitSyncStatus('Offline — connect to load your data', false, 'bootstrap')
     emitBootstrap(false, 'Offline — connect to load your data')
     return
@@ -422,26 +430,41 @@ export async function bootstrapSync(): Promise<void> {
 
   if (syncing) return
   syncing = true
-  emitSyncStatus('Loading from cloud…', true, 'bootstrap')
+  emitSyncStatus(warmStart ? 'Syncing…' : 'Loading from cloud…', true, 'bootstrap')
 
   try {
-    await clearLocalStore()
-    await pullFromSupabase(true, (p) => emitSyncStatus(p.stage, true, 'bootstrap'), {
-      reconcile: true,
-    })
+    if (warmStart) {
+      await flushPendingPush()
+      await pullFromSupabase(false, (p) => emitSyncStatus(p.stage, true, 'bootstrap'))
+    } else {
+      await pullFromSupabase(true, (p) => emitSyncStatus(p.stage, true, 'bootstrap'), {
+        reconcile: true,
+      })
+    }
 
     const { dedupeInboxLists } = await import('../services/taskLists')
     await dedupeInboxLists({ push: false })
 
+    const { processCalendarRepeats } = await import('../services/templateRepeat')
+    await processCalendarRepeats()
+
     await db.syncMeta.put({
       id: 'main',
       lastPullAt: now(),
-      lastPushAt: now(),
+      lastPushAt: (await db.syncMeta.get('main'))?.lastPushAt ?? now(),
     })
 
     emitSyncStatus('', false, 'bootstrap')
     emitBootstrap(true, '')
   } catch (e) {
+    if (warmStart) {
+      const { processCalendarRepeats } = await import('../services/templateRepeat')
+      await processCalendarRepeats()
+      const msg = e instanceof Error ? e.message : 'Sync failed'
+      emitSyncStatus(`${msg} — showing saved data`, false, 'bootstrap')
+      emitBootstrap(true, `${msg} — showing saved data`)
+      return
+    }
     const msg = e instanceof Error ? e.message : 'Failed to load from cloud'
     emitSyncStatus(msg, false, 'bootstrap')
     emitBootstrap(false, msg)

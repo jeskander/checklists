@@ -14,14 +14,14 @@ import {
   applyInstanceScheduledStartChange,
   getOrCreateDay,
 } from './days'
+import { pruneStaleRepeatInstances, type RepeatSource } from './repeatInstances'
 
-async function hasInstanceFromTaskList(dayId: string, taskListId: string): Promise<boolean> {
-  const count = await db.dayInstances
+async function findInstanceFromTaskList(dayId: string, taskListId: string) {
+  return db.dayInstances
     .where('dayId')
     .equals(dayId)
     .filter((i) => i.sourceTaskListId === taskListId)
-    .count()
-  return count > 0
+    .first()
 }
 
 /** Add recurring task-list blocks from today through each rule's horizon. */
@@ -47,15 +47,25 @@ async function applyRepeatForTaskList(
   fromDate: string,
   horizonDays: number
 ): Promise<void> {
+  const source: RepeatSource = { kind: 'taskList', taskListId, defaultDurationMin }
+  await pruneStaleRepeatInstances(source, repeat)
+
   for (let offset = 0; offset <= horizonDays; offset++) {
     const dateStr = addDaysToDateString(fromDate, offset)
     if (!isRepeatDueOnDate(repeat, dateStr)) continue
 
     const day = await getOrCreateDay(dateStr)
-    if (await hasInstanceFromTaskList(day.id, taskListId)) continue
-
-    const instanceId = await addInstanceFromTaskList(taskListId, day.id, defaultDurationMin)
     const scheduledStartMs = repeatScheduledStartMs(repeat, dateStr)
+    const existing = await findInstanceFromTaskList(day.id, taskListId)
+
+    if (existing) {
+      await applyInstanceScheduledStartChange(existing.id, scheduledStartMs)
+      continue
+    }
+
+    const instanceId = await addInstanceFromTaskList(taskListId, day.id, defaultDurationMin, undefined, {
+      createdByRepeat: true,
+    })
     await applyInstanceScheduledStartChange(instanceId, scheduledStartMs)
   }
 }

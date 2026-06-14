@@ -253,7 +253,7 @@ export class ChecklistsDB extends Dexie {
           })
       )
 
-    this.version(13).stores({
+    this.version(14).stores({
       checklistTemplates: 'id, sortOrder, updatedAt',
       templateItems: 'id, templateId, parentItemId, sortOrder',
       days: 'id, date',

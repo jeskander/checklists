@@ -1,0 +1,41 @@
+.options-menu {
+  position: fixed;
+  z-index: 1000;
+  min-width: 11rem;
+  padding: 0.35rem 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow-lg);
+}
+
+.options-menu-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 0.55rem 0.85rem;
+  font-size: 0.9rem;
+  color: var(--ink);
+  background: transparent;
+}
+
+.options-menu-item:hover:not(:disabled) {
+  background: var(--bg-subtle);
+}
+
+.options-menu-item:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.options-menu-item--destructive {
+  color: var(--danger, #c0392b);
+}
+
+.options-menu-item + .options-menu-item {
+  border-top: 1px solid color-mix(in srgb, var(--border) 65%, transparent);
+}
+
+.options-menu-item--destructive {
+  border-top-color: color-mix(in srgb, var(--border) 65%, transparent);
+}

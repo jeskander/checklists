@@ -13,11 +13,13 @@ import { collectDescendantIds } from '../lib/completion'
 import {
   addTaskListItem,
   addTaskListItemAfter,
+  completeTaskListItem,
   deleteTaskList,
   deleteTaskListItem,
   isInboxList,
   reparentTaskListItem,
   restoreTaskList,
+  restoreTaskListItem,
   restoreTaskListItems,
   setTaskListRootSortOrders,
   updateTaskList,
@@ -106,6 +108,12 @@ export function TaskListEditorPage() {
       {!inbox ? (
         <TemplateRepeatEditor
           repeat={list.repeat}
+          source={{
+            kind: 'taskList',
+            id,
+            title: list.title,
+            defaultDurationMin: list.defaultDurationMin,
+          }}
           onChange={(repeat: TemplateRepeat | undefined) => {
             void updateTaskList(id, { repeat }).then(() => processCalendarRepeats())
           }}
@@ -115,8 +123,8 @@ export function TaskListEditorPage() {
       <h2 className="section-label">Tasks</h2>
       <p className="section-hint">
         {inbox
-          ? 'Tab on a line to add a sub-step inside the same task. Priority, duration, and due date apply to the whole task.'
-          : 'Tab to add sub-steps inside a task. Priority, duration, and due date apply to the whole task. Completed tasks disappear from this list.'}
+          ? 'Tab on a line to add a sub-step inside the same task. Tap ⋮⋮ for options or drag to reorder.'
+          : 'Tab to add sub-steps inside a task. Tap ⋮⋮ for options or drag to reorder. Completed tasks disappear from this list.'}
       </p>
 
       {!openItems.length ? (
@@ -131,6 +139,14 @@ export function TaskListEditorPage() {
           onUpdateImportance={(itemId, importance) => void updateTaskListGroupMeta(itemId, { importance })}
           onUpdateDuration={(itemId, durationMin) => void updateTaskListGroupMeta(itemId, { durationMin })}
           onUpdateDeadline={(itemId, deadline) => void updateTaskListGroupMeta(itemId, { deadline })}
+          onCompleteTask={async (rootId) => {
+            const snap = openItems.find((i) => i.id === rootId)
+            if (!snap) return
+            await completeTaskListItem(rootId)
+            showUndo('Task completed', async () => {
+              await restoreTaskListItem(rootId)
+            })
+          }}
           onDeleteTask={async (rootId) => {
             const snap = openItems.find((i) => i.id === rootId)
             if (!snap) return

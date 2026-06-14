@@ -259,6 +259,46 @@
   max-width: 100px;
 }
 
+.repeat-time-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.repeat-per-day-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.85rem;
+  color: var(--ink-muted);
+  cursor: pointer;
+  user-select: none;
+}
+
+.repeat-per-day-toggle input {
+  accent-color: var(--accent);
+}
+
+.repeat-day-times {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.repeat-day-time-row {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.repeat-day-time-label {
+  width: 2.25rem;
+  flex-shrink: 0;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--ink-muted);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .repeat-editor-chevron,
   .repeat-switch-track,

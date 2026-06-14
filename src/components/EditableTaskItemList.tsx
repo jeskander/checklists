@@ -14,16 +14,18 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import { DurationInput } from './DurationInput'
 import { DeadlineInput } from './DeadlineInput'
 import { ImportanceInput } from './ImportanceInput'
 import { ListItemInput } from './ListItemInput'
+import { OptionsMenu, type OptionsMenuAction } from './OptionsMenu'
 import type { TaskListItem } from '../db/types'
 import { getChildren } from '../lib/completion'
 import { extractSubtreeBlock, flattenItemTree } from '../lib/itemTreeMove'
 import { reorderIds } from '../lib/reorder'
 import type { ListItemRow } from '../lib/listItems'
+import { useSortableHandleMenu } from '../hooks/useSortableHandleMenu'
 
 type Props = {
   items: TaskListItem[]
@@ -32,6 +34,7 @@ type Props = {
   onUpdateImportance: (id: string, importance: TaskListItem['importance']) => void
   onUpdateDuration: (id: string, durationMin: number) => void
   onUpdateDeadline: (id: string, deadline: string | undefined) => void
+  onCompleteTask: (rootId: string) => void
   onDeleteTask: (rootId: string) => void
   onDeleteSubitem: (itemId: string) => void
   onAddAfter: (afterItemId: string, title?: string) => Promise<string | void>
@@ -45,12 +48,15 @@ export function EditableTaskItemList({
   onUpdateImportance,
   onUpdateDuration,
   onUpdateDeadline,
+  onCompleteTask,
   onDeleteTask,
   onDeleteSubitem,
   onAddAfter,
   onReparent,
 }: Props) {
   const [activeId, setActiveId] = useState<string | null>(null)
+  const [menuState, setMenuState] = useState<{ rootId: string; anchorRect: DOMRect } | null>(null)
+  const didDragRef = useRef(false)
 
   const roots = useMemo(
     () => getChildren(items, undefined).sort((a, b) => a.sortOrder - b.sortOrder),
@@ -80,6 +86,8 @@ export function EditableTaskItemList({
   }
 
   const handleDragStart = (event: DragStartEvent) => {
+    didDragRef.current = true
+    setMenuState(null)
     setActiveId(String(event.active.id))
   }
 
@@ -91,44 +99,121 @@ export function EditableTaskItemList({
     await onReorderRoots(newOrder)
   }
 
+  const moveRoot = useCallback(
+    async (rootId: string, direction: 'up' | 'down') => {
+      const idx = roots.findIndex((root) => root.id === rootId)
+      if (idx < 0) return
+      const targetIdx = direction === 'up' ? idx - 1 : idx + 1
+      if (targetIdx < 0 || targetIdx >= roots.length) return
+      await onReorderRoots(reorderIds(roots, rootId, roots[targetIdx].id))
+    },
+    [roots, onReorderRoots]
+  )
+
+  const menuRoot = menuState ? roots.find((root) => root.id === menuState.rootId) : undefined
+  const menuRootIndex = menuRoot ? roots.findIndex((root) => root.id === menuRoot.id) : -1
+
+  const menuItems: OptionsMenuAction[] = menuRoot
+    ? [
+        {
+          id: 'complete',
+          label: 'Mark complete',
+          onSelect: () => onCompleteTask(menuRoot.id),
+        },
+        {
+          id: 'substep',
+          label: 'Add sub-step',
+          onSelect: () => {
+            void onAddAfter(menuRoot.id, '')
+          },
+        },
+        {
+          id: 'up',
+          label: 'Move up',
+          disabled: menuRootIndex <= 0,
+          onSelect: () => {
+            void moveRoot(menuRoot.id, 'up')
+          },
+        },
+        {
+          id: 'down',
+          label: 'Move down',
+          disabled: menuRootIndex < 0 || menuRootIndex >= roots.length - 1,
+          onSelect: () => {
+            void moveRoot(menuRoot.id, 'down')
+          },
+        },
+        ...(menuRoot.deadline
+          ? [
+              {
+                id: 'clear-deadline',
+                label: 'Clear due date',
+                onSelect: () => onUpdateDeadline(menuRoot.id, undefined),
+              } satisfies OptionsMenuAction,
+            ]
+          : []),
+        {
+          id: 'delete',
+          label: 'Delete',
+          destructive: true,
+          onSelect: () => onDeleteTask(menuRoot.id),
+        },
+      ]
+    : []
+
   const activeRoot = activeId ? roots.find((r) => r.id === activeId) : undefined
 
   if (!roots.length) return null
 
   return (
-    <DndContext
-      sensors={sensors}
-      collisionDetection={closestCenter}
-      onDragStart={handleDragStart}
-      onDragEnd={(e) => void handleDragEnd(e)}
-    >
-      <SortableContext items={roots.map((r) => r.id)} strategy={verticalListSortingStrategy}>
-        <div className="task-items-list">
-          {roots.map((root) => (
-            <SortableTaskGroupCard
-              key={root.id}
-              root={root}
-              subitems={subitemsByRoot.get(root.id) ?? []}
-              isDragging={activeId === root.id}
-              onUpdateTitle={onUpdateTitle}
-              onUpdateImportance={onUpdateImportance}
-              onUpdateDuration={onUpdateDuration}
-              onUpdateDeadline={onUpdateDeadline}
-              onDeleteTask={onDeleteTask}
-              onDeleteSubitem={onDeleteSubitem}
-              itemKeyboard={itemKeyboard}
-            />
-          ))}
-        </div>
-      </SortableContext>
-      <DragOverlay>
-        {activeRoot ? (
-          <div className="task-item-overlay">
-            <span className="task-item-overlay-title">{activeRoot.title || 'Untitled task'}</span>
+    <>
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCenter}
+        onDragStart={handleDragStart}
+        onDragEnd={(e) => void handleDragEnd(e)}
+      >
+        <SortableContext items={roots.map((r) => r.id)} strategy={verticalListSortingStrategy}>
+          <div className="task-items-list">
+            {roots.map((root) => (
+              <SortableTaskGroupCard
+                key={root.id}
+                root={root}
+                subitems={subitemsByRoot.get(root.id) ?? []}
+                isDragging={activeId === root.id}
+                menuOpen={menuState?.rootId === root.id}
+                didDragRef={didDragRef}
+                onOpenMenu={(anchor) =>
+                  setMenuState({ rootId: root.id, anchorRect: anchor.getBoundingClientRect() })
+                }
+                onUpdateTitle={onUpdateTitle}
+                onUpdateImportance={onUpdateImportance}
+                onUpdateDuration={onUpdateDuration}
+                onUpdateDeadline={onUpdateDeadline}
+                onDeleteTask={onDeleteTask}
+                onDeleteSubitem={onDeleteSubitem}
+                itemKeyboard={itemKeyboard}
+              />
+            ))}
           </div>
-        ) : null}
-      </DragOverlay>
-    </DndContext>
+        </SortableContext>
+        <DragOverlay>
+          {activeRoot ? (
+            <div className="task-item-overlay">
+              <span className="task-item-overlay-title">{activeRoot.title || 'Untitled task'}</span>
+            </div>
+          ) : null}
+        </DragOverlay>
+      </DndContext>
+
+      {menuState && menuItems.length > 0 ? (
+        <OptionsMenu
+          anchorRect={menuState.anchorRect}
+          items={menuItems}
+          onClose={() => setMenuState(null)}
+        />
+      ) : null}
+    </>
   )
 }
 
@@ -136,6 +221,9 @@ function SortableTaskGroupCard({
   root,
   subitems,
   isDragging,
+  menuOpen,
+  didDragRef,
+  onOpenMenu,
   onUpdateTitle,
   onUpdateImportance,
   onUpdateDuration,
@@ -147,6 +235,9 @@ function SortableTaskGroupCard({
   root: TaskListItem
   subitems: TaskListItem[]
   isDragging: boolean
+  menuOpen: boolean
+  didDragRef: React.MutableRefObject<boolean>
+  onOpenMenu: (anchor: HTMLElement) => void
   onUpdateTitle: (id: string, title: string) => void
   onUpdateImportance: (id: string, importance: TaskListItem['importance']) => void
   onUpdateDuration: (id: string, durationMin: number) => void
@@ -160,6 +251,12 @@ function SortableTaskGroupCard({
   }
 }) {
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: root.id })
+  const { handleProps } = useSortableHandleMenu({
+    listeners,
+    didDragRef,
+    onOpenMenu,
+  })
+
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
@@ -175,9 +272,11 @@ function SortableTaskGroupCard({
         <button
           type="button"
           className="task-item-drag"
-          aria-label="Drag to reorder task"
+          aria-label="Task options. Drag to reorder."
+          aria-haspopup="menu"
+          aria-expanded={menuOpen}
           {...attributes}
-          {...listeners}
+          {...handleProps}
         >
           ⋮⋮
         </button>

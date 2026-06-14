@@ -35,6 +35,7 @@ type Props = {
   onReparentItem: (itemId: string, parentId?: string) => Promise<void>
   onApplyItemStructure: (structure: ItemTreeStructureRow[]) => Promise<void>
   onDeleteItem: (itemId: string) => void
+  onDuplicateItem?: (itemId: string) => void
   editTitleOnOpen?: boolean
   editScheduleOnOpen?: boolean
 }
@@ -59,6 +60,7 @@ export function DayInstanceDetailSheet({
   onReparentItem,
   onApplyItemStructure,
   onDeleteItem,
+  onDuplicateItem,
   editTitleOnOpen,
   editScheduleOnOpen,
 }: Props) {
@@ -154,12 +156,14 @@ export function DayInstanceDetailSheet({
               {items.length > 0 ? (
                 <EditableItemList
                   compact
+                  itemMenu
                   items={items}
                   onToggle={onToggleItem}
                   onApplyStructure={onApplyItemStructure}
                   onUpdateTitle={onUpdateItemTitle}
                   onUpdateDuration={instance.sourceTaskListId ? onUpdateItemDuration : undefined}
                   onDelete={onDeleteItem}
+                  onDuplicate={onDuplicateItem}
                   onAddAfter={onAddItemAfter}
                   onReparent={onReparentItem}
                 />

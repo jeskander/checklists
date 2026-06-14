@@ -117,6 +117,7 @@ async function rowToDayInstance(row: any): Promise<DayInstance> {
     altGroupId: row.alt_group_id ?? undefined,
     altGroupIndex: row.alt_group_index ?? undefined,
     altStackIndex: row.alt_stack_index ?? undefined,
+    createdByRepeat: row.created_by_repeat ?? undefined,
     updatedAt: toMs(row.updated_at),
   }
 }

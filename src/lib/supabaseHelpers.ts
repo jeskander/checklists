@@ -70,8 +70,33 @@ export interface RepeatColumns {
   repeat_time_hhmm: string | null
   repeat_anchor_date: string | null
   repeat_weekday: number | null
+  repeat_weekday_times: Record<string, string> | null
+  repeat_skipped_dates: string[] | null
   repeat_day_of_month: number | null
   repeat_month: number | null
+}
+
+function weekdayTimesToColumn(
+  repeat: TemplateRepeat
+): Record<string, string> | null {
+  if (repeat.unit !== 'week' || !repeat.weekdayTimes) return null
+  const out: Record<string, string> = {}
+  for (const [day, time] of Object.entries(repeat.weekdayTimes)) {
+    if (time) out[String(day)] = time
+  }
+  return Object.keys(out).length ? out : null
+}
+
+function columnToWeekdayTimes(
+  value: Record<string, string> | null | undefined
+): Partial<Record<number, string>> | undefined {
+  if (!value) return undefined
+  const times: Partial<Record<number, string>> = {}
+  for (const [day, time] of Object.entries(value)) {
+    const n = parseInt(day, 10)
+    if (Number.isFinite(n) && n >= 0 && n <= 6 && time) times[n] = time
+  }
+  return Object.keys(times).length ? times : undefined
 }
 
 export function repeatToColumns(repeat: TemplateRepeat | undefined): RepeatColumns {
@@ -82,6 +107,8 @@ export function repeatToColumns(repeat: TemplateRepeat | undefined): RepeatColum
       repeat_time_hhmm: null,
       repeat_anchor_date: null,
       repeat_weekday: null,
+      repeat_weekday_times: null,
+      repeat_skipped_dates: null,
       repeat_day_of_month: null,
       repeat_month: null,
     }
@@ -93,6 +120,8 @@ export function repeatToColumns(repeat: TemplateRepeat | undefined): RepeatColum
     repeat_anchor_date: repeat.anchorDate,
     repeat_weekday:
       repeat.unit === 'week' ? weekdaysToColumn(getRepeatWeekdays(repeat)) : null,
+    repeat_weekday_times: weekdayTimesToColumn(repeat),
+    repeat_skipped_dates: repeat.skippedDates?.length ? repeat.skippedDates : null,
     repeat_day_of_month: repeat.dayOfMonth ?? null,
     repeat_month: repeat.month ?? null,
   }
@@ -110,6 +139,8 @@ export function columnsToRepeat(row: RepeatColumns): TemplateRepeat | undefined 
     timeHHMM: row.repeat_time_hhmm,
     anchorDate: row.repeat_anchor_date,
     weekdays,
+    weekdayTimes: columnToWeekdayTimes(row.repeat_weekday_times),
+    skippedDates: row.repeat_skipped_dates ?? undefined,
     dayOfMonth: row.repeat_day_of_month ?? undefined,
     month: row.repeat_month ?? undefined,
   }

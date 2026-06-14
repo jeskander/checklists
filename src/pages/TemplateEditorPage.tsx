@@ -92,6 +92,12 @@ export function TemplateEditorPage() {
 
       <TemplateRepeatEditor
         repeat={template.repeat}
+        source={{
+          kind: 'template',
+          id,
+          title: template.title,
+          defaultDurationMin: template.defaultDurationMin,
+        }}
         onChange={(repeat: TemplateRepeat | undefined) => {
           void updateTemplate(id, { repeat }).then(() => processCalendarRepeats())
         }}

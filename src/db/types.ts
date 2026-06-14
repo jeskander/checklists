@@ -90,6 +90,8 @@ export interface DayInstance {
   altGroupIndex?: number
   /** Top-to-bottom stack index within a split column. */
   altStackIndex?: number
+  /** Set when auto-added by a repeat rule (not manual day picker). */
+  createdByRepeat?: boolean
   updatedAt: number
 }
 

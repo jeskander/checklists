@@ -1,8 +1,13 @@
 import { db } from '../db/database'
 import type { Day, DayFreeTime, DayInstance, DayInstanceItem } from '../db/types'
 import { newId, now, todayDateString } from '../lib/ids'
-import { collectDescendantIds } from '../lib/completion'
-import type { ItemTreeStructureRow } from '../lib/itemTreeMove'
+import { collectDescendantIds, getChildren, isItemComplete } from '../lib/completion'
+import {
+  extractSubtreeBlock,
+  flatToStructure,
+  flattenItemTree,
+  type ItemTreeStructureRow,
+} from '../lib/itemTreeMove'
 import { buildSplitColumns, splitRowMinutes } from '../lib/daySplitLayout'
 import {
   buildTimeline,
@@ -21,7 +26,7 @@ import {
 import { DAY_WINDOW_MINUTES } from '../lib/dayTimeline'
 import { canReparentUnder } from '../lib/listItems'
 import { defaultFirstSlotOnDay } from '../lib/scheduleTime'
-import { listTemplateItems, getTemplate } from './templates'
+import { listTemplateItems, getTemplate, createTemplate, addTemplateItem } from './templates'
 import { completeTaskListItem, getTaskList, listTaskListItems, restoreTaskListItem } from './taskLists'
 import { packTasksForSession } from '../lib/packTaskList'
 import { syncDayInstanceItemToTaskList } from '../lib/taskListItemSync'
@@ -31,6 +36,10 @@ import { enqueueSync } from '../sync/syncEngine'
 export type FreeSlotInsert = {
   freeId: string
   scheduledStartMs: number
+}
+
+export type AddInstanceOpts = {
+  createdByRepeat?: boolean
 }
 
 // ─── Days ────────────────────────────────────────────────────────────────────
@@ -179,7 +188,8 @@ async function finalizeNewInstancePlacement(
 export async function addInstanceFromTemplate(
   templateId: string,
   dayId: string,
-  at?: FreeSlotInsert
+  at?: FreeSlotInsert,
+  opts?: AddInstanceOpts
 ): Promise<string> {
   const template = await getTemplate(templateId)
   if (!template) throw new Error('Template not found')
@@ -198,6 +208,7 @@ export async function addInstanceFromTemplate(
     scheduledStartMs,
     addedAt: ts,
     collapsed: true,
+    createdByRepeat: opts?.createdByRepeat,
     updatedAt: ts,
   }
 
@@ -264,7 +275,8 @@ export async function addInstanceFromTaskList(
   taskListId: string,
   dayId: string,
   durationMin: number,
-  at?: FreeSlotInsert
+  at?: FreeSlotInsert,
+  opts?: AddInstanceOpts
 ): Promise<string> {
   const taskList = await getTaskList(taskListId)
   if (!taskList) throw new Error('Task list not found')
@@ -285,6 +297,7 @@ export async function addInstanceFromTaskList(
     scheduledStartMs,
     addedAt: ts,
     collapsed: true,
+    createdByRepeat: opts?.createdByRepeat,
     updatedAt: ts,
   }
 
@@ -387,6 +400,155 @@ export async function deleteInstance(id: string): Promise<void> {
     const dateStr = await getDayDate(inst.dayId)
     await rescheduleDayTimeline(inst.dayId, dateStr)
   }
+}
+
+export async function completeAllInstanceItems(instanceId: string): Promise<void> {
+  const items = await listInstanceItems(instanceId)
+  const roots = getChildren(items, undefined)
+  for (const root of roots) {
+    if (!isItemComplete(root.id, items)) {
+      await toggleInstanceItem(root.id, true)
+    }
+  }
+}
+
+export async function duplicateInstance(instanceId: string): Promise<string> {
+  const source = await db.dayInstances.get(instanceId)
+  if (!source) throw new Error('Instance not found')
+
+  const sourceItems = await listInstanceItems(instanceId)
+  const sortOrder = await nextTimelineSortOrder(source.dayId)
+  const scheduledStartMs = await plannedStartForNewInstance(source.dayId)
+  const newInstanceId = newId()
+  const ts = now()
+
+  const instance: DayInstance = {
+    id: newInstanceId,
+    dayId: source.dayId,
+    title: source.title,
+    durationMin: source.durationMin,
+    sortOrder,
+    scheduledStartMs,
+    addedAt: ts,
+    collapsed: source.collapsed,
+    noteJson: source.noteJson,
+    updatedAt: ts,
+  }
+
+  const idMap = new Map<string, string>()
+  for (const item of sourceItems) {
+    idMap.set(item.id, newId())
+  }
+
+  await db.transaction('rw', [db.dayInstances, db.dayInstanceItems, db.syncQueue], async () => {
+    await db.dayInstances.add(instance)
+    await enqueueSync('create', 'dayInstance', newInstanceId)
+
+    for (const item of sourceItems) {
+      const newItemId = idMap.get(item.id)!
+      const newItem: DayInstanceItem = {
+        id: newItemId,
+        instanceId: newInstanceId,
+        parentItemId: item.parentItemId ? idMap.get(item.parentItemId) : undefined,
+        title: item.title,
+        durationMin: item.durationMin,
+        deadline: item.deadline,
+        completed: false,
+        sortOrder: item.sortOrder,
+        updatedAt: ts,
+      }
+      await db.dayInstanceItems.add(newItem)
+      await enqueueSync('create', 'dayInstanceItem', newItemId)
+    }
+  })
+
+  await finalizeNewInstancePlacement(source.dayId, newInstanceId)
+  return newInstanceId
+}
+
+export async function saveInstanceAsTemplate(instanceId: string): Promise<string> {
+  const instance = await db.dayInstances.get(instanceId)
+  if (!instance) throw new Error('Instance not found')
+
+  const items = await listInstanceItems(instanceId)
+  const template = await createTemplate(instance.title || 'Untitled', instance.durationMin)
+  const flat = flattenItemTree(items)
+  const idMap = new Map<string, string>()
+
+  for (const entry of flat) {
+    const source = items.find((i) => i.id === entry.id)
+    if (!source) continue
+    const parentItemId = source.parentItemId ? idMap.get(source.parentItemId) : undefined
+    const created = await addTemplateItem(template.id, source.title, parentItemId)
+    idMap.set(source.id, created.id)
+  }
+
+  return template.id
+}
+
+export async function detachInstanceFromSource(instanceId: string): Promise<void> {
+  const existing = await db.dayInstances.get(instanceId)
+  if (!existing) return
+  if (!existing.sourceTemplateId && !existing.sourceTaskListId) return
+
+  await db.dayInstances.put({
+    ...existing,
+    sourceTemplateId: undefined,
+    sourceTaskListId: undefined,
+    createdByRepeat: undefined,
+    updatedAt: now(),
+  })
+  await enqueueSync('update', 'dayInstance', instanceId)
+}
+
+export async function duplicateInstanceItem(itemId: string): Promise<string> {
+  const sourceItem = await db.dayInstanceItems.get(itemId)
+  if (!sourceItem) throw new Error('Item not found')
+
+  const instanceId = sourceItem.instanceId
+  const allItems = await listInstanceItems(instanceId)
+  const flat = flattenItemTree(allItems)
+  const block = extractSubtreeBlock(flat, itemId)
+  if (!block.length) throw new Error('Item not found')
+
+  const blockStart = flat.findIndex((e) => e.id === itemId)
+  const blockEnd = blockStart + block.length
+  const idMap = new Map(block.map((entry) => [entry.id, newId()]))
+  const newRootId = idMap.get(itemId)!
+  const ts = now()
+
+  const duplicatedFlat = block.map((entry) => ({
+    id: idMap.get(entry.id)!,
+    depth: entry.depth,
+  }))
+  const nextFlat = [...flat.slice(0, blockEnd), ...duplicatedFlat, ...flat.slice(blockEnd)]
+
+  await db.transaction('rw', [db.dayInstanceItems, db.syncQueue], async () => {
+    for (const entry of block) {
+      const oldItem = allItems.find((i) => i.id === entry.id)
+      if (!oldItem) continue
+      const newIdForItem = idMap.get(entry.id)!
+      const parentItemId = oldItem.parentItemId
+        ? idMap.get(oldItem.parentItemId) ?? oldItem.parentItemId
+        : undefined
+      const newItem: DayInstanceItem = {
+        id: newIdForItem,
+        instanceId,
+        parentItemId,
+        title: oldItem.title,
+        durationMin: oldItem.durationMin,
+        deadline: oldItem.deadline,
+        completed: false,
+        sortOrder: oldItem.sortOrder,
+        updatedAt: ts,
+      }
+      await db.dayInstanceItems.add(newItem)
+      await enqueueSync('create', 'dayInstanceItem', newIdForItem)
+    }
+  })
+
+  await applyInstanceItemTree(instanceId, flatToStructure(nextFlat))
+  return newRootId
 }
 
 export async function resetInstance(id: string): Promise<{

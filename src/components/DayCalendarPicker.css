@@ -1,0 +1,149 @@
+.day-cal-picker {
+  position: absolute;
+  top: calc(100% + 0.35rem);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 40;
+  width: min(100vw - 2.5rem, 320px);
+  padding: 0.85rem 0.75rem 0.75rem;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow-lg);
+  animation: fadeUp 0.2s ease-out both;
+}
+
+.day-cal-picker-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.35rem;
+  margin-bottom: 0.65rem;
+}
+
+.day-cal-picker-title {
+  flex: 1;
+  text-align: center;
+  font-family: var(--font-display);
+  font-size: 1.15rem;
+  font-weight: 500;
+  line-height: 1.2;
+}
+
+.day-cal-picker-shift {
+  min-width: 36px;
+  min-height: 36px;
+  flex-shrink: 0;
+}
+
+.day-cal-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 0.15rem;
+  margin-bottom: 0.25rem;
+}
+
+.day-cal-weekday {
+  text-align: center;
+  font-size: 0.65rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-faint);
+}
+
+.day-cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 0.15rem;
+}
+
+.day-cal-cell {
+  aspect-ratio: 1;
+  min-height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: var(--ink);
+  transition: background 0.12s ease, color 0.12s ease, box-shadow 0.12s ease;
+}
+
+.day-cal-cell:hover {
+  background: var(--bg-subtle);
+}
+
+.day-cal-cell--outside {
+  color: var(--ink-faint);
+}
+
+.day-cal-cell--complete {
+  background: color-mix(in srgb, var(--progress-task) 38%, transparent);
+}
+
+.day-cal-cell--incomplete {
+  background: color-mix(in srgb, var(--progress-time) 48%, transparent);
+}
+
+.day-cal-cell--urgent {
+  background: color-mix(in srgb, #c0392b 32%, transparent);
+}
+
+.day-cal-cell--today {
+  box-shadow: inset 0 0 0 2px var(--accent);
+}
+
+.day-cal-cell--selected {
+  background: var(--accent);
+  color: var(--bg-elevated);
+  box-shadow: none;
+}
+
+.day-cal-cell--selected.day-cal-cell--today {
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--bg-elevated) 65%, transparent);
+}
+
+.day-cal-cell--selected:hover {
+  background: var(--accent);
+  color: var(--bg-elevated);
+}
+
+.day-cal-legend {
+  list-style: none;
+  margin: 0.75rem 0 0;
+  padding: 0.55rem 0 0;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.55rem 0.85rem;
+  font-size: 0.68rem;
+  color: var(--ink-muted);
+}
+
+.day-cal-legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.day-cal-legend-swatch {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 999px;
+  flex-shrink: 0;
+}
+
+.day-cal-legend-swatch--complete {
+  background: color-mix(in srgb, var(--progress-task) 70%, transparent);
+}
+
+.day-cal-legend-swatch--incomplete {
+  background: color-mix(in srgb, var(--progress-time) 75%, transparent);
+}
+
+.day-cal-legend-swatch--urgent {
+  background: color-mix(in srgb, #c0392b 55%, transparent);
+}

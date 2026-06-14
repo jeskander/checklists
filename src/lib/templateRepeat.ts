@@ -1,4 +1,4 @@
-import { applyTimeOnDate } from './scheduleTime'
+import { applyTimeOnDate, DAY_START_TIME } from './scheduleTime'
 import { todayDateString } from './ids'
 
 export type RepeatUnit = 'day' | 'week' | 'month' | 'year'
@@ -20,6 +20,10 @@ export interface TemplateRepeat {
   weekday?: number
   /** 0 = Sunday … 6 = Saturday — for `week` (one or more days) */
   weekdays?: number[]
+  /** Weekly overrides only — days omitted use `timeHHMM`. */
+  weekdayTimes?: Partial<Record<number, string>>
+  /** YYYY-MM-DD dates to omit from the repeat schedule. */
+  skippedDates?: string[]
   /** 1–31 — for `month` and `year` */
   dayOfMonth?: number
   /** 1–12 — for `year` only */
@@ -55,10 +59,53 @@ export function getRepeatWeekdays(repeat: TemplateRepeat | LegacyTemplateRepeat)
 }
 
 function withWeekdays(repeat: TemplateRepeat): TemplateRepeat {
-  if (repeat.unit !== 'week') return repeat
+  if (repeat.unit !== 'week') {
+    const { weekdayTimes: _t, weekday: _w, weekdays: _d, ...rest } = repeat
+    return rest
+  }
   const weekdays = getRepeatWeekdays(repeat)
   const { weekday: _w, ...rest } = repeat
-  return { ...rest, weekdays }
+  return pruneWeekdayTimes({ ...rest, weekdays })
+}
+
+function pruneWeekdayTimes(repeat: TemplateRepeat): TemplateRepeat {
+  if (repeat.unit !== 'week' || !repeat.weekdayTimes) return repeat
+
+  const cleaned: Partial<Record<number, string>> = {}
+  for (const day of getRepeatWeekdays(repeat)) {
+    const time = repeat.weekdayTimes[day]
+    if (time && time !== repeat.timeHHMM) cleaned[day] = time
+  }
+
+  if (Object.keys(cleaned).length === 0) {
+    const { weekdayTimes: _t, ...rest } = repeat
+    return rest
+  }
+  return { ...repeat, weekdayTimes: cleaned }
+}
+
+/** True when a weekly rule stores per-day time overrides. */
+export function hasPerWeekdayTimes(repeat: TemplateRepeat): boolean {
+  return repeat.unit === 'week' && Object.keys(repeat.weekdayTimes ?? {}).length > 0
+}
+
+/** Effective HH:mm for a weekday in a weekly rule. */
+export function repeatTimeForWeekday(repeat: TemplateRepeat, weekday: number): string {
+  const normalized = normalizeTemplateRepeat(repeat)
+  return normalized.weekdayTimes?.[weekday] ?? normalized.timeHHMM
+}
+
+/** Effective HH:mm for a calendar date. */
+export function repeatTimeHHMMForDate(
+  raw: TemplateRepeat | LegacyTemplateRepeat,
+  dateStr: string
+): string {
+  const repeat = normalizeTemplateRepeat(raw)
+  if (repeat.unit === 'week') {
+    const weekday = parseDate(dateStr).getDay()
+    return repeatTimeForWeekday(repeat, weekday)
+  }
+  return repeat.timeHHMM
 }
 
 export function monthLabel(month: number): string {
@@ -86,7 +133,12 @@ export function normalizeTemplateRepeat(
 
 function clampRepeat(repeat: TemplateRepeat): TemplateRepeat {
   const every = Math.min(99, Math.max(1, Math.round(repeat.every) || 1))
-  return { ...repeat, every }
+  const next = { ...repeat, every }
+  if (!next.skippedDates?.length) {
+    const { skippedDates: _s, ...rest } = next
+    return rest
+  }
+  return { ...next, skippedDates: [...new Set(next.skippedDates)].sort() }
 }
 
 export function defaultTemplateRepeat(referenceDate = new Date()): TemplateRepeat {
@@ -95,7 +147,7 @@ export function defaultTemplateRepeat(referenceDate = new Date()): TemplateRepea
     every: 1,
     unit: 'week',
     weekdays: [referenceDate.getDay()],
-    timeHHMM: '09:00',
+    timeHHMM: DAY_START_TIME,
     anchorDate,
   }
 }
@@ -115,6 +167,11 @@ export function formatTemplateRepeat(raw: TemplateRepeat | LegacyTemplateRepeat)
   let on = ''
   if (repeat.unit === 'week') {
     const weekdays = getRepeatWeekdays(repeat)
+    if (hasPerWeekdayTimes(repeat)) {
+      const slots = weekdays.map((day) => `${weekdayLabel(day)} ${repeatTimeForWeekday(repeat, day)}`)
+      on = ` on ${slots.join(', ')}`
+      return `${interval}${on}`
+    }
     on = ` on ${weekdays.map(weekdayLabel).join(', ')}`
   } else if (repeat.unit === 'month' && repeat.dayOfMonth != null) {
     on = ` on the ${ordinal(repeat.dayOfMonth)}`
@@ -178,12 +235,21 @@ function alignToWeekday(from: string, weekday: number): string {
   return from
 }
 
+export function isRepeatSkippedOnDate(
+  raw: TemplateRepeat | LegacyTemplateRepeat,
+  dateStr: string
+): boolean {
+  const repeat = normalizeTemplateRepeat(raw)
+  return repeat.skippedDates?.includes(dateStr) ?? false
+}
+
 export function isRepeatDueOnDate(
   raw: TemplateRepeat | LegacyTemplateRepeat,
   dateStr: string
 ): boolean {
   const repeat = normalizeTemplateRepeat(raw)
   if (daysBetween(repeat.anchorDate, dateStr) < 0) return false
+  if (isRepeatSkippedOnDate(repeat, dateStr)) return false
 
   const d = parseDate(dateStr)
 
@@ -240,8 +306,7 @@ export function repeatScheduledStartMs(
   raw: TemplateRepeat | LegacyTemplateRepeat,
   dateStr: string
 ): number {
-  const repeat = normalizeTemplateRepeat(raw)
-  return applyTimeOnDate(dateStr, repeat.timeHHMM)
+  return applyTimeOnDate(dateStr, repeatTimeHHMMForDate(raw, dateStr))
 }
 
 /** Defaults when switching repeat unit in the editor */

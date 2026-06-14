@@ -30,6 +30,8 @@ export interface Database {
           repeat_time_hhmm: string | null
           repeat_anchor_date: string | null
           repeat_weekday: number | null
+          repeat_weekday_times: Record<string, string> | null
+          repeat_skipped_dates: string[] | null
           repeat_day_of_month: number | null
           repeat_month: number | null
           updated_at: string
@@ -77,6 +79,7 @@ export interface Database {
           alt_group_id: string | null
           alt_group_index: number | null
           alt_stack_index: number | null
+          created_by_repeat: boolean
           updated_at: string
         }
         Insert: Omit<Database['public']['Tables']['day_instances']['Row'], 'id' | 'added_at' | 'updated_at'> & {

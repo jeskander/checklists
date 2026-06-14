@@ -152,6 +152,35 @@ export function groupTimelineForDisplay(
   return result
 }
 
+/** Standalone block (not in a split row) adjacent to the given instance on the day timeline. */
+export function findAdjacentStandaloneInstance(
+  instanceId: string,
+  instances: DayInstance[],
+  freeTimes: DayFreeTime[],
+  direction: 'above' | 'below'
+): DayInstance | undefined {
+  const source = instances.find((i) => i.id === instanceId)
+  if (!source || source.altGroupId) return undefined
+
+  const timeline = buildTimeline(instances, freeTimes)
+  const display = groupTimelineForDisplay(timeline, instances, freeTimes)
+
+  let idx = -1
+  for (let i = 0; i < display.length; i++) {
+    const entry = display[i]
+    if (entry.kind === 'instance' && entry.instance.id === instanceId) {
+      idx = i
+      break
+    }
+  }
+  if (idx < 0) return undefined
+
+  const neighborIdx = direction === 'above' ? idx - 1 : idx + 1
+  const neighbor = display[neighborIdx]
+  if (!neighbor || neighbor.kind !== 'instance') return undefined
+  return neighbor.instance
+}
+
 function displayEntryMinutes(entry: DisplayTimelineEntry): number {
   if (entry.kind === 'free') return entry.free.durationMin
   if (entry.kind === 'split') return entry.rowMinutes

@@ -6,7 +6,7 @@ import {
 } from '../lib/daySplitLayout'
 import type { TimeGap } from '../lib/dayTimeline'
 import { SortableDayFreeTime } from './SortableDayFreeTime'
-import { SortableDayTileInner } from './SortableDayTileInner'
+import { SortableDayTileInner, type BlockMenuHandlers } from './SortableDayTileInner'
 
 type Props = {
   altGroupId: string
@@ -17,9 +17,10 @@ type Props = {
   freeGaps: Map<string, TimeGap>
   dropHint: { targetId: string; side: 'left' | 'right' } | null
   stackHintId: string | null
+  blockDidDragRef: React.MutableRefObject<boolean>
   instanceHandlers: (inst: DayInstance) => {
     onOpen: () => void
-    onDelete: () => void
+    blockMenu: BlockMenuHandlers
   }
 }
 
@@ -31,6 +32,7 @@ export function DaySplitRow({
   freeGaps,
   dropHint,
   stackHintId,
+  blockDidDragRef,
   instanceHandlers,
 }: Props) {
   const layout = computeSplitVisualLayout(columns, rowMinutes, instanceStarts, freeGaps)
@@ -70,6 +72,7 @@ export function DaySplitRow({
                     fillHeight
                     dropHint={dropHint}
                     stackHintId={stackHintId}
+                    didDragRef={blockDidDragRef}
                     {...instanceHandlers(item.instance)}
                   />
                 )}
