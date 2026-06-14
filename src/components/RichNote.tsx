@@ -62,7 +62,14 @@ export function RichNote({ content, onChange, placeholder = 'Notes…' }: Props)
   })
 
   useEffect(() => {
-    return () => debouncedSave.cancel()
+    const onHide = () => {
+      if (document.visibilityState === 'hidden') debouncedSave.flush()
+    }
+    document.addEventListener('visibilitychange', onHide)
+    return () => {
+      document.removeEventListener('visibilitychange', onHide)
+      debouncedSave.flush()
+    }
   }, [debouncedSave])
 
   useEffect(() => {

@@ -67,7 +67,7 @@ export function SyncProvider() {
       }
       if (Date.now() - lastSyncAt.current < VISIBILITY_SYNC_MIN_MS) return
       lastSyncAt.current = Date.now()
-      void runSync({ fullPull: true, pullOnly: true })
+      void runSync({ fullPull: false, pullOnly: true })
     }
 
     document.addEventListener('visibilitychange', onVisibility)

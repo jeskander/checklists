@@ -142,13 +142,10 @@ async function mergeIfNewer<T extends { id: string; updatedAt: number }>(
   table: { get: (id: string) => Promise<T | undefined>; put: (row: T) => Promise<unknown> },
   row: T,
   pendingDeleteIds: Set<string>,
-  force = false
+  pendingUpsertIds: Set<string>
 ): Promise<void> {
   if (pendingDeleteIds.has(row.id)) return
-  if (force) {
-    await table.put(row)
-    return
-  }
+  if (pendingUpsertIds.has(row.id)) return
   const existing = await table.get(row.id)
   if (existing && existing.updatedAt > row.updatedAt) return
   await table.put(row)
@@ -168,13 +165,28 @@ async function loadPendingDeleteIds(): Promise<Map<string, Set<string>>> {
   return map
 }
 
+async function loadPendingUpsertIds(): Promise<Map<string, Set<string>>> {
+  const ops = await db.syncQueue.filter((op) => op.type !== 'delete').toArray()
+  const map = new Map<string, Set<string>>()
+  for (const op of ops) {
+    let ids = map.get(op.entity)
+    if (!ids) {
+      ids = new Set()
+      map.set(op.entity, ids)
+    }
+    ids.add(op.entityId)
+  }
+  return map
+}
+
 async function pruneLocalIds<T extends { id: string }>(
   table: { toArray: () => Promise<T[]>; delete: (id: string) => Promise<void> },
-  remoteIds: Set<string>
+  remoteIds: Set<string>,
+  pendingUpsertIds: Set<string>
 ): Promise<void> {
   const local = await table.toArray()
   for (const row of local) {
-    if (!remoteIds.has(row.id)) await table.delete(row.id)
+    if (!remoteIds.has(row.id) && !pendingUpsertIds.has(row.id)) await table.delete(row.id)
   }
 }
 
@@ -214,8 +226,8 @@ export async function pullFromSupabase(
   const since = full ? undefined : meta?.lastPullAt
   const sinceIso = since ? new Date(since).toISOString() : undefined
   const pendingDeletes = await loadPendingDeleteIds()
+  const pendingUpserts = await loadPendingUpsertIds()
   const reconcile = full && (opts?.reconcile ?? false)
-  const force = reconcile
 
   const stage = (name: string) => onProgress?.({ stage: name })
 
@@ -246,7 +258,7 @@ export async function pullFromSupabase(
         },
         rowToTemplate(row),
         pendingDeletes.get('template') ?? new Set(),
-        force
+        pendingUpserts.get('template') ?? new Set()
       )
     } else if (row.kind === 'task_list') {
       taskListIds.add(String(row.id))
@@ -257,7 +269,7 @@ export async function pullFromSupabase(
         },
         rowToTaskList(row),
         pendingDeletes.get('taskList') ?? new Set(),
-        force
+        pendingUpserts.get('taskList') ?? new Set()
       )
     }
   }
@@ -282,7 +294,7 @@ export async function pullFromSupabase(
         },
         rowToTemplateItem(row),
         pendingDeletes.get('templateItem') ?? new Set(),
-        force
+        pendingUpserts.get('templateItem') ?? new Set()
       )
     } else {
       taskListItemIds.add(String(row.id))
@@ -293,7 +305,7 @@ export async function pullFromSupabase(
         },
         rowToTaskListItem(row),
         pendingDeletes.get('taskListItem') ?? new Set(),
-        force
+        pendingUpserts.get('taskListItem') ?? new Set()
       )
     }
   }
@@ -310,15 +322,18 @@ export async function pullFromSupabase(
     const remote = rowToDay(row)
     dayIds.add(remote.id)
     const pending = pendingDeletes.get('day') ?? new Set()
+    const pendingUpsert = pendingUpserts.get('day') ?? new Set()
     if (pending.has(remote.id)) continue
 
     const existingById = await db.days.get(remote.id)
     const existingByDate = await db.days.where('date').equals(remote.date).first()
 
     if (existingById) {
-      if (force || existingById.updatedAt <= remote.updatedAt) await db.days.put(remote)
+      if (pendingUpsert.has(existingById.id)) continue
+      if (existingById.updatedAt <= remote.updatedAt) await db.days.put(remote)
     } else if (existingByDate) {
-      if (force || existingByDate.updatedAt <= remote.updatedAt) {
+      if (pendingUpsert.has(existingByDate.id)) continue
+      if (existingByDate.updatedAt <= remote.updatedAt) {
         await remapDayId(existingByDate.id, remote)
       }
     } else {
@@ -344,7 +359,7 @@ export async function pullFromSupabase(
       },
       inst,
       pendingDeletes.get('dayInstance') ?? new Set(),
-      force
+      pendingUpserts.get('dayInstance') ?? new Set()
     )
   }
 
@@ -365,7 +380,7 @@ export async function pullFromSupabase(
       },
       rowToDayFreeTime(row),
       pendingDeletes.get('dayFreeTime') ?? new Set(),
-      force
+      pendingUpserts.get('dayFreeTime') ?? new Set()
     )
   }
 
@@ -386,20 +401,24 @@ export async function pullFromSupabase(
       },
       rowToDayInstanceItem(row),
       pendingDeletes.get('dayInstanceItem') ?? new Set(),
-      force
+      pendingUpserts.get('dayInstanceItem') ?? new Set()
     )
   }
 
   if (reconcile) {
     stage('Reconciling…')
-    await pruneLocalIds(db.checklistTemplates, templateIds)
-    await pruneLocalIds(db.taskLists, taskListIds)
-    await pruneLocalIds(db.templateItems, templateItemIds)
-    await pruneLocalIds(db.taskListItems, taskListItemIds)
-    await pruneLocalIds(db.days, dayIds)
-    await pruneLocalIds(db.dayInstances, dayInstanceIds)
-    await pruneLocalIds(db.dayFreeTimes, dayFreeTimeIds)
-    await pruneLocalIds(db.dayInstanceItems, dayInstanceItemIds)
+    await pruneLocalIds(db.checklistTemplates, templateIds, pendingUpserts.get('template') ?? new Set())
+    await pruneLocalIds(db.taskLists, taskListIds, pendingUpserts.get('taskList') ?? new Set())
+    await pruneLocalIds(db.templateItems, templateItemIds, pendingUpserts.get('templateItem') ?? new Set())
+    await pruneLocalIds(db.taskListItems, taskListItemIds, pendingUpserts.get('taskListItem') ?? new Set())
+    await pruneLocalIds(db.days, dayIds, pendingUpserts.get('day') ?? new Set())
+    await pruneLocalIds(db.dayInstances, dayInstanceIds, pendingUpserts.get('dayInstance') ?? new Set())
+    await pruneLocalIds(db.dayFreeTimes, dayFreeTimeIds, pendingUpserts.get('dayFreeTime') ?? new Set())
+    await pruneLocalIds(
+      db.dayInstanceItems,
+      dayInstanceItemIds,
+      pendingUpserts.get('dayInstanceItem') ?? new Set()
+    )
   }
 
   await db.syncMeta.put({
